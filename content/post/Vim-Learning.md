@@ -91,3 +91,42 @@ count[1,10,5] motion[w,$,e]
 - :#,#s/old/new/g: 将#到#行的全部old替换成new  
 - :%s/old/new/g: 将整个文件的old替换成new  
 - :%s/old/new/gc: 带提示的将整个文件的old替换成new  
+#### 5.1 How to execute an external command  
+在":!"后面接一个外部的命令(如:ls)即可以去执行该命令  
+#### 5.2 More on writing files  
+使用":w filename"将当前的文件内容写入filename文件中  
+#### 5.3 Selecting text to write  
+使用v视图选择部分内容，然后键入":"，尾行会显示":'<,'>"，然后键入"w filename"即可将所选内容写入到filename文件中。  
+#### 5.4 Retrieving and merging files  
+使用":r filename"插入文件中的内容  
+同时可以将外部命令的输出值写入文件中，如":r !ls"
+#### 6.1 Open&APPEND&REPLACE Command  
+- Open: 键入"o"可以在当前光标后面添加一行，键入"O"可以在当前光标前面添加一行，两者皆可进入插入模式  
+- Append: 键入"a"和"i"皆可在当前光标处进入插入模式进行输入，键入"A"和"I",分别实在光标所在行尾和行首处进入插入模式  
+- Replace: 键入"R"即可在光标处进入插入模式，并是替换的方式进行文本修改  
+#### 6.2 Copy and Paste text  
+先键入"v"进入可视模式，并选择要拷贝的文本，再使用"y"将其复制到粘贴板中。最后移动光标到需要粘贴的位置，键入"p"进行粘贴  
+#### 6.3 Set option  
+- ":set ic"(ignore case)表示进行搜索时忽略大小写，":set noic"可取消该设置  
+- ":set hls is"(highlight search,incsearch)表示将搜索内容进行高亮显示，":set nohls"表示取消该设置  
+- 当只一次搜索进行大小写忽略时可以使用"\c"，如"/phare\c "
+#### 7.1 Getting help  
+Vim有三种方式打开在线帮助系统，分别是"HELP"键、"F1"键和键入":help"  
+当打开另一个窗口后，可以使用CTRL-W、CTRL-W进行窗口间的跳转  
+如果你想查询任何"子帮助"可以在":help"后面带上相应的参数如":help w"  
+#### 7.2  
+vim相较于Vi来说有更多的功能，但是绝大多数功能默认都是关闭的。要启用这些功能你必须创建一个"vimrc"文件。  
+- 当没有vimrc文件时进行文件的创建，主要依赖于你的操作系统  
+    + Unix :e ~/.vimrc  
+    + Windows :$VIM/_vimrc  
+- 读取示例"vimrc"文件的内容，添加到上一步创建的文件中 
+    :r $VIMRUNTIME/vimrc_example.vim  
+- 保存文件  
+    :w  
+这样当你第二次使用Vim时，就会有各种语法高亮  
+#### 7.3 COMPLETION  
+使用CTRL-D和tab键进行命令的补全  
+CTRL-D会以列表的形式将"e"开头的命令显示出来  
+tab则会将命令进行补全  
+### 3. 进一步学习vim  
+可以使用:help user-manual进行进一步的学习vim

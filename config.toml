@@ -14,9 +14,9 @@ enableRobotsTXT = true
 #googleAnalytics = "UA-123-45"
 
 [params]
-title = "我是郭微"
+title = "请回答1988"
 author = "Guo Wei"
-description = "祝罗晓萱生日快乐"
+description = "人真正变强大，不是因为守护着自尊心，而是抛开自尊心的时候！"
 profilePicture = "images/profile.jpg"
 keywords = ""
 favicon = "favicons/"
@@ -36,10 +36,10 @@ use = "katex"  # options: "katex", "mathjax". default is "katex".
 #title = "Linkedin"
 #url = "https://de.linkedin.com/"
 
-#[[params.socialIcons]]
-#icon = "fa-github"
-#title = "GitHub"
-#url = "https://github.com/lxndrblz/anatole/"
+[[params.socialIcons]]
+icon = "fa-github"
+title = "GitHub"
+url = "https://github.com/guowei7"
 
 #[[params.socialIcons]]
 #icon = "fa-instagram"
