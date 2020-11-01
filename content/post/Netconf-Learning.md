@@ -105,9 +105,64 @@ DisableComments: false
         #使用redistribute命令将ospf 1的所有路由进行通告，还可以通告static isis connected类型的路由
         [VFOSWIND(bgp-af)] redistribute ospf 1  
         [VFOSWIND(bgp-af)] commit  
-        ```
-6. 保存路由设备的所有配置  
+        ```  
+6. evpn相关配置  
+    * evpn instance配置  
+    > evpn  
+    > &emsp;evpn vpn-instance 1  
+    > &emsp;&emsp;rd 1:1  
+    > &emsp;&emsp;route-target import 1:1  
+    > &emsp;&emsp;route-target export 1:1  
+    > &emsp;!  
+    > &emsp;interface eth-1gi 0/3/1/4  
+    > &emsp;&emsp;ethernet-segment  
+    > &emsp;&emsp;&emsp;identifier  type 0 00.00.00.00.00.00.00.00.04  
+    > &emsp;&emsp;!  
+    > &emsp;!  
+    > !
+    * 子接口配置  
+    > interface eth-1gi 0/3/1/4.1  
+    > &emsp;l2transport  
+    > &emsp;encapsulation dot1q  
+    > &emsp;vlan-type dot1q 200  
+    > !  
+    * 绑定evpn实例到子接口  
+    > evpl binding evpn vpn-instance 1  
+    > &emsp;interface eth-1gi 0/3/1/4.1 
+    > &emsp;neighbor target 1 source 2  
+    > !  
+    * bgp中配置l2vpn evpn地址族  
+    >router bgp 100  
+    >&emsp;bgp router-id 1.1.1.1  
+    >&emsp;address-family ipv4 unicast  
+    >&emsp;&emsp;redistribute connected  
+    >&emsp;&emsp;redistribute ospf 1  
+    >&emsp;!  
+    >&emsp;neighbor 2.2.2.2  
+    >&emsp;&emsp;remote-as 100  
+    >&emsp;&emsp;update-source 1.1.1.1  
+    >&emsp;&emsp;address-family ipv4 unicast  
+    >&emsp;&emsp;&emsp;send community extended  
+    >&emsp;&emsp;!  
+    >&emsp;&emsp;address-family l2vpn evpn  
+    >&emsp;&emsp;!  
+    >&emsp;!  
+    >&emsp;neighbor 3.3.3.3  
+    >&emsp;&emsp;remote-as 100  
+    >&emsp;&emsp;update-source 1.1.1.1  
+    >&emsp;&emsp;address-family ipv4 unicast  
+    >&emsp;&emsp;&emsp;send community extended  
+    >&emsp;&emsp;!  
+    >&emsp;&emsp;address-family l2vpn evpn  
+    >&emsp;&emsp;!  
+    >&emsp;!  
+    >!
+7. 路由设备配置相关  
     ``` shell  
     #将配置保存到13.cfg中
     [VFOSWIND] save 13.cfg  
+    #加载配置，配置的路径为(/mnt/userdir/fosuserdir/rootfs/home/config/nem/ 主控盘中)，也可以使用find / -name filename 进行查找
+    [VFOSWIND] startup saved-configuration 13.cfg
+    #清空当前的配置，加载配置后需要重启主控盘(docker)生效
+    [VFOSWIND] startup saved-configuration null
     ```
