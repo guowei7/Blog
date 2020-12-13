@@ -126,11 +126,21 @@ DisableComments: false
     > &emsp;encapsulation dot1q  
     > &emsp;vlan-type dot1q 200  
     > !  
+    > interface eth-1gi 0/3/1/4.2
+    > &emsp;l2transport  
+    > &emsp;encapsulation dot1q  
+    > &emsp;vlan-type dot1q 200
+    > !
     * 绑定evpn实例到子接口  
-    > evpl binding evpn vpn-instance 1  
-    > &emsp;interface eth-1gi 0/3/1/4.1 
-    > &emsp;neighbor target 1 source 2  
+    > evpl 15
+    > &emsp;neighbor evpn vpn-instance 1  target 1 source 2
+    > &emsp;interface eth-1gi 0/3/1/4.1  
     > !  
+    *vpls配置
+    > bridge-domain bid  
+    > &emsp;evpn binding vpn-instance 1  
+    > &emsp;interface eth-1gi 0/3/1/4.2  
+    > !
     * bgp中配置l2vpn evpn地址族  
     >router bgp 100  
     >&emsp;bgp router-id 1.1.1.1  
