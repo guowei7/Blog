@@ -9,17 +9,20 @@ DisableComments: false
 主要记录网络配置命令学习的心得
 <!--more-->
 ### 常用的网络配置命令  
+
 1. 进入网络配置命令行  
     * 从host主机进入  
         ``` shell
         [root@vfowind ~]telnet 0 20000  
-        ```  
+        ```
+
     * 从主控盘进入  
         ``` shell  
         #登录主控盘
         [root@vfowind ~] docker-login mpu_0_1
         [root@mpu_0_1 /] telnet 0 9000  
-        ```  
+        ```
+
 2. 展示网络接口分配的ip地址和给接口分配ip地址  
     * 展示网络接口的状态  
         ``` shell  
@@ -27,14 +30,16 @@ DisableComments: false
         [VFOSWIND] config terminal  
         #展示网络接口的状态
         [VFOSWIND(config)] show ip interface brief  
-        ```  
+        ```
+
     * 给接口分配ip地址  
         ``` shell  
         #进入需要配置的接口，如loopback0  
         [VFOSWIND(config)] interface loopback 0  
         #给loopback0配置ip地址1.1.1.55
         [VFOSWIND(loopback 0)] ip address 1.1.1.55/32  
-        ```  
+        ```
+
 3. 配置直连接口  
     当两个设备的接口通过物理线连接后，并给两端的接口配置了同一个网段的ip后即会直连。  
     ``` shell  
@@ -43,14 +48,16 @@ DisableComments: false
     [VFOSWIND(eth-1gi 0/3/1/1)] ip address 12.12.12.1/24  
     [VFOSWIND(eth-1gi 0/3/1/1)] no shutdown  
     [VFOSWIND(eth-1gi 0/3/1/1)] commit
-    ```  
+    ```
+
     ``` shell  
     #主机B进入以太网接口eth-1gi 0/3/1/1 并配置ip地址为12.12.12.2/24
     [VFOSWIND(config)] interface eth-1gi 0/3/1/1  
     [VFOSWIND(eth-1gi 0/3/1/1)] ip address 12.12.12.2/24  
     [VFOSWIND(eth-1gi 0/3/1/1)] no shutdown
     [VFOSWIND(eth-1gi 0/3/1/1)] commit  
-    ```  
+    ```
+
 4. 配置OSPF协议  
     给需要运行OSPF协议的路由器配置并将对应端口通告给OSPF学习  
     ``` shell  
@@ -68,8 +75,26 @@ DisableComments: false
     #通告方式
     [VFOSWIND(ospf-area-intf)] network point-to-point    
     [VFOSWIND(ospf-area-intf)] commit  
-    ```  
-5. 配置BGP并将路由信息通告BGP进行传递  
+    ```
+
+5. 配置ISIS协议  
+    配置基础的ISIS进程，并使对应的接口使能。  
+
+    ``` shell
+    #配置isis进程，进程名为1  
+    [VFOSWIND(config)] router isis 1  
+    #配置网络实体名称，区域ID(1-13bytes)+系统ID(6bytes)+n-selector(00固定值)  
+    [VFOSWIND(config-isis)] net 10.0000.0000.0001.00  
+    [VFOSWIND(config-isis)] is-type level-1  
+    #设置开销类型  
+    [VFOSWIND(config-isis)] metric-style wide level-1  
+    [VFOSWIND(config-isis)] metric-style wide level-2  
+    #配置接口使能，将要加入isis的接口都进行相应地址族的使能  
+    [VFOSWIND(config-isis)] interface loopback 0  
+    [VFOSWIND(config-isis-if)] address-family ipv4 unicast  
+    ```
+
+6. 配置BGP并将路由信息通告BGP进行传递  
     * 配置BGP  
         ``` shell  
         #进入bgp配置视图，并且本地AS为100
@@ -94,8 +119,8 @@ DisableComments: false
         [VFOSWIND(bgp-neighbor)] remote-as 200  
         [VFOSWIND(bgp-neighbor)] no shutdown    
         [VFOSWIND(bgp-neighbor)] commit  
+        ```
 
-        ```  
     * 通告路由给BGP协议  
         ``` shell  
         #根据要通告的路由类型选定对应的地址族，并进入配置视图
@@ -105,9 +130,11 @@ DisableComments: false
         #使用redistribute命令将ospf 1的所有路由进行通告，还可以通告static isis connected类型的路由
         [VFOSWIND(bgp-af)] redistribute ospf 1  
         [VFOSWIND(bgp-af)] commit  
-        ```  
-6. evpn相关配置  
+        ```
+
+7. evpn相关配置  
     * evpn instance配置  
+
     > evpn  
     > &emsp;evpn vpn-instance 1  
     > &emsp;&emsp;rd 1:1  
@@ -119,29 +146,38 @@ DisableComments: false
     > &emsp;&emsp;&emsp;identifier  type 0 00.00.00.00.00.00.00.00.04  
     > &emsp;&emsp;!  
     > &emsp;!  
-    > !
+    > !  
+    
     * 子接口配置  
+
     > interface eth-1gi 0/3/1/4.1  
     > &emsp;l2transport  
     > &emsp;encapsulation dot1q  
     > &emsp;vlan-type dot1q 200  
     > !  
-    > interface eth-1gi 0/3/1/4.2
+    > interface eth-1gi 0/3/1/4.2  
     > &emsp;l2transport  
     > &emsp;encapsulation dot1q  
-    > &emsp;vlan-type dot1q 200
-    > !
+    > &emsp;vlan-type dot1q 200  
+    > !  
+    
     * 绑定evpn实例到子接口  
-    > evpl 15
-    > &emsp;neighbor evpn vpn-instance 1  target 1 source 2
+
+    > evpl 15  
+    > &emsp;neighbor evpn vpn-instance 1  target 1 source 2  
     > &emsp;interface eth-1gi 0/3/1/4.1  
     > !  
-    *vpls配置
+    
+    * vpls配置,并配置2类evpn路由，mac-address配置  
+
     > bridge-domain bid  
     > &emsp;evpn binding vpn-instance 1  
     > &emsp;interface eth-1gi 0/3/1/4.2  
-    > !
+    > &emsp;&emsp;mac-address static 0000-0001-0015  
+    > !  
+    
     * bgp中配置l2vpn evpn地址族  
+
     >router bgp 100  
     >&emsp;bgp router-id 1.1.1.1  
     >&emsp;address-family ipv4 unicast  
@@ -166,8 +202,9 @@ DisableComments: false
     >&emsp;&emsp;address-family l2vpn evpn  
     >&emsp;&emsp;!  
     >&emsp;!  
-    >!
-7. 路由设备配置相关  
+    >!  
+
+8. 路由设备配置相关  
     ``` shell  
     #将配置保存到13.cfg中
     [VFOSWIND] save 13.cfg  
@@ -176,3 +213,42 @@ DisableComments: false
     #清空当前的配置，加载配置后需要重启主控盘(docker)生效
     [VFOSWIND] startup saved-configuration null
     ```
+
+9. VPNV4相关配置  
+    ``` shell
+    #配置vrf，包括rd rt的相关配置
+    [VFOSWIND(config)]vrf 1
+    [VFOSWIND(vrf)]address-family ipv4 unicast
+    [VFOSWIND(vrf-af-ipv4-uni)]rd 1:1
+    [VFOSWIND(vrf-af-ipv4-uni)]route-target both 1:1
+    #配置对应接口绑定vrf
+    [VFOSWIND(config)]interface eth-1gi 0/3/1/4.1
+    [VFOSWIND(eth-1gi 0/3/1/4.1)]ip vrf forwarding 1
+    [VFOSWIND(eth-1gi 0/3/1/4.1)]ip address 192.168.3.1/24
+    [VFOSWIND(eth-1gi 0/3/1/4.1)]encapsulation dot1q
+    [VFOSWIND(eth-1gi 0/3/1/4.1)]vlan-type dot1q 100
+    #将vrf的路由通告给BGP
+    [VFOSWIND(config)]router bgp 100
+    [VFOSWIND(router-bgp)]vrf 1
+    [VFOSWIND(bgp-vrf)]address-family ipv4 unicast
+    [VFOSWIND(bgp-vrf-af-ipv4-uni)]redistribute connected
+    ```
+
+10. 路由策略相关配置  
+    ``` shell
+    #配置ipv4-prefix
+    [VFOSWIND(config)]ipv4-prefix 1 seq 1 deny prefix 192.168.3.1/24
+    #配置rd-filter
+    [VFOSWIND(config)]ip rd-filter filter-1 deny 5:5
+    #配置route-policy
+    [VFOSWIND(config)]route-policy policy_1_out deny node 1
+    [VFOSWIND(route-policy)]if-match ipv4 address ipv4-prefix 1
+    [VFOSWIND(route-policy)]if-match rd-filter filter-1
+    #BGP应用对应的route-policy进行过滤。
+    [VFOSWIND(config)]router bgp 100
+    [VFOSWIND(router-bgp)]neighbor 2.2.2.2
+    [VFOSWIND(bgp-neighbor)]address-family vpnv4 unicast
+    [VFOSWIND(bgp-vrf-af-vpnv4-uni)]route-policy policy_1_out out 
+    ```
+
+11. 

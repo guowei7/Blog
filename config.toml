@@ -14,9 +14,9 @@ enableRobotsTXT = true
 #googleAnalytics = "UA-123-45"
 
 [params]
-title = "霍乱时期的爱情"
+title = "狂人日记"
 author = "guowei"
-description = "人不是从娘胎里出来就一成不变的，相反，生活会逼迫他一次又一次地脱胎换骨。"
+description = "从来如此，便对吗！"
 profilePicture = "images/profile.jpg"
 keywords = ""
 favicon = "favicons/"
