@@ -397,6 +397,146 @@ UNIX(运行命令行模式时)、Linux(ditto)和Window命令行提示都能重�
 
     下列函数使用了上述两个函数为一个进行算术运算的函数提供整数，该函数计算特定范围内所有整数的平方和。程序限制了范围的上限是10000000，下限是-10000000。  
     [checking.c](../../c-example/checking.c)  
-    
+   
+1. 分析程序  
+虽然checking.c核心的计算部分(sum_squares())很短，但是输入验证部分比以往程序实例要复杂。接下来分析其中的一些要素，先着重讨论程序的整体结构。  
+程序遵循模块化的编程思想，使用独立函数(模块)来验证输入和管理显示。程序越大，使用模块化编程就越重要。  
+main()函数管理程序流，为其他函数委派任务。它使用get_long()获取值、while循环处理值、badlimits()函数检查值是否有效、sum_squres()函数处理实际的计算。  
+
+2. 输入流和数字  
+在编写处理错误输入的代码时，应该很清楚C是如何处理输入的。考虑下面的输入：  
+
+> is 28 12.4  
+
+在我们眼中，这就像是一个由字符、整数和浮点数组成的字符串。但是对C程序而言，这是一个字节流。第1个字节是字母i的字符编码，第2个字节是字母s的字符编码、第3个字节是空格字符的字符编码，第4个字节是数字2的字符编码，等等。所以，如果get_long()函数处理这一行输入，第1个字符是非数字，那么整行输入都会被丢弃，包括其中的数字，因为这些数字只是该输入行中的其他字符。  
+虽然输入流由字符组成，但是也可以设置scanf()函数把它们转换成数值。例如 42。  
+如果在scanf()函数中使用%c转换说明，它只会读取字符4并将其存储在char类型的变量中。如果使用%s转换说明，他会读取字符4和字符2这两个字符，并将其存储在字符数组中。如果使用%d转换说明，scanf()同样会读取两个字符，但是随后会计算出它们对应的整数值：4*10+2,即42，然后将表示该整数的二进制数储存在int类型的变量中。如果使用%f转换说明，scanf()也会读取两个字符，计算出它们对应的数值42.0，用内部的浮点表示法表示该值，并将结果储存在float类型的变量中。  
+简而言之，输入由字符组成，但是scanf()可以把输入转换成整数值或浮点数值。使用转换说明(如%d或%f)限制了可接受输入的字符类型，而getchar()和使用%c的scanf()接受所有的字符。
+
 #### 菜单浏览  
 
+许多计算机程序都把菜单作为用户界面的一部分。菜单给用户提供方便的同时，却给程序员带来了一些麻烦。我们看看其中涉及了哪些问题。  
+菜单给用户提供了一份响应程序的选项。假设有下面一个例子：  
+
+>Enter the letter of your choice:  
+>a. advice   b. bell  
+>c. count    q. quit  
+
+理想状态是，用户输入程序所列选项之一，然后程序根据用户所选项完成任务。作为一名程序员，自然希望这一过程能顺利进行。因此，第1个目标是：当用户遵循指令时程序顺利运行；第2个目标是：当用户没有遵循指令时，程序也能顺利运行。显而易见，要实现第2个目标难度较大，因为很难预料用户在使用程序时的所有错误情况。  
+现在的应用程序通常使用图形界面，可以点击按钮、查看对话框、触摸图标，而不是我们实例中的命令行模式。但是，两者的处理过程大致相同：给用户提供选项、检查并执行用户的响应、保护程序不受误操作的影响。除了界面不同，它们底层的程序结构也几乎相同。但是，使用图形界面更容易通过限制选项控制输入。  
+
+1. 任务  
+我们来更具体地分析一个菜单程序需要执行哪些任务。它要获取用户的响应，根据响应选择要执行的动作。另外，程序应该提供返回菜单的选项。C的switch语句是根据选项决定行为的好工具，用户的每个选择都可以对应一个特定的case标签。使用while语句可以实现重复访问菜单的功能。  
+
+2. 使执行更顺利  
+当你决定实现这个程序时，就要开始考虑如何让程序顺利运行。例如，你能做的是让“获取选项”部分的代码筛选掉不合适的响应，只把正确的响应传入switch。这表明需要为输入过程提供一个只返回正确响应的函数。结合while循环和switch语句，其程序结构如下:  
+
+``` C
+#include <stdio.h>
+char get_choice(void);
+void count(void);
+int main(void)
+{
+    int choice;
+    while((choice = get_choice()) != 'q')
+    {
+        switch(choice)
+        {
+            case 'a':
+                printf("Buy low,sell high.\n");
+                break;
+            case 'b':
+                putchar('\a');
+                break;
+            case 'c':
+                count();
+                break;
+            default:
+                printf("Program error!\n");
+                break;
+        }
+    }
+    return 0;
+}
+```
+
+定义get_choice()函数只能返回'a'、'b'、'c'和'q'。get_choice()的用法和getchar()相同，两个函数都是获取一个值，并与终止值(该例子中是'q')作比较。我们尽量简化实际的菜单选项，以便读者把注意力集中在程序结构上。稍后再讨论count()函数。default语句可以方便调试。如果get_choice()函数没能把返回值限制为菜单指定的几个选项值，default语句有助于发现问题所在。  
+
+``` C 
+char get_choice(void)
+{
+    int ch;
+    pirntf("Enter the letter of your choice:\n");
+    printf("a. advice        b. bell\n");
+    printf("c. count         q. quit\n");
+    ch = getchar();
+    while((ch < 'a' || ch > 'c') && ch != 'q')
+    {
+        printf("Please respond with a, b, c, or q.\n");
+        ch = getchar();
+    }
+    return ch;
+}
+```
+
+缓冲输入依旧带来些麻烦，程序把用户每次按下Return键产生的换行符视为错误响应。为了让程序的界面更流畅，该函数应该跳过这些换行符。  
+这类问题有多种解决方案。一种是用名为get_first()的新函数替换getchar()函数，读取一行的第一个字符并丢弃剩余的字符。这种方法的有点是，把类型act这样的输入视为简单的a，而不是继续吧act中的c作为选项c的一个有效的响应。  
+
+``` C 
+char get_choice(void)
+{
+    int ch;
+    printf("Enter the letter of your choice:\n");
+    printf("a. advice        b. bell\n");
+    printf("c. count         q. quit\n");
+    ch = get_first();
+    while((ch < 'a' || ch > 'c') && ch != 'q')
+    {
+        printf("Please respond with a, b, c, or q.\n");
+        ch = get_first();
+    }
+    return ch;
+}
+
+char get_first()
+{
+    int ch;
+    ch = getchar();
+    while(getchar() ！= '\n')
+        continue;
+    return ch;
+}
+```
+
+3. 混合字符和数值输入  
+前面分析过混合字符和数值输入会产生一些问题，创建菜单也有这样的问题。例如，假设count()函数的代码如下：  
+
+```
+void count(void)
+{
+    int n,i;  
+    printf("Count how far? Enter an integer:\n");
+    scanf("%d",&n);
+    for(i = 1; i <= n; i++)
+        printf("%d\n",i);
+}
+```  
+
+如果输入3作为响应，scanf()会读取3并把换行符留在输入队列中。下次调用get_choice()将导致get_first()返回这个换行符，从而导致我们不希望出现的行为。  
+重写get_first()，使其返回下一个非空白字符而不仅仅是下一个字符，即可修复这个问题。另一种方法是，在count()函数中清理换行符，如下：  
+
+``` C 
+void count(void)
+{
+    int n, i;
+    printf("Count how far? Enter an integer:\n");
+    n = get_int();
+    for(i = 1; i <= n; i++)
+        printf("%d\n", i);
+    while(getchar() != '\n')
+        continue;
+}
+```
+
+最后的菜单程序如下：  
+[menuette.c](../../c-example/menutte.c)  
