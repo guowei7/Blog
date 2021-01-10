@@ -21,7 +21,7 @@ profilePicture = "images/profile.jpg"
 keywords = ""
 favicon = "favicons/"
 customCss = []
-customJs = ["js/playmusic.js"]
+customJs = []
 mainSections = ["post"]
 images = ["images/site-feature-image.png"]
 
@@ -37,7 +37,7 @@ use = "katex"  # options: "katex", "mathjax". default is "katex".
 #url = "https://de.linkedin.com/"
 
 [[params.socialIcons]]
-icon = "fa-github"
+icon = "fab fa-github"
 title = "GitHub"
 url = "https://github.com/guowei7"
 
@@ -47,7 +47,7 @@ url = "https://github.com/guowei7"
 #url = "https://www.instagram.com/"
 
 [[params.socialIcons]]
-icon = "fa-envelope"
+icon = "fas fa-envelope"
 title = "e-mail"
 url = "mailto:770857344@qq.com"
 
