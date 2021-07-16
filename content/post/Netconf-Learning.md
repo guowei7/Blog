@@ -132,6 +132,24 @@ DisableComments: false
         [VFOSWIND(bgp-af)] commit  
         ```
 
+    * 路由延时下发  
+        将bgp的路由延时下发给urm，并且只有当为frr或ecmp情况有多个下一跳时才会延时下发。
+        ``` 
+        router bgp 100
+            bgp router-id 2.2.2.2
+            route-select delay 60
+        !
+        ```
+
+    * 默认local-preference值修改  
+        ```
+        router bgp 100
+            bgp router-id 2.2.2.2
+            #默认值为100,设置为100和no的反向命令是相同的效果
+            bgp default local-preference 50 
+        !
+        ```
+
 7. evpn相关配置  
     * evpn instance配置  
 
@@ -251,4 +269,50 @@ DisableComments: false
     [VFOSWIND(bgp-vrf-af-vpnv4-uni)]route-policy policy_1_out out 
     ```
 
-11. 
+11. 普通vpws和vpls的配置  
+    ``` shell
+    #配置二层子接口
+    interface eth-1gi 0/3/1/4.1
+        l2transport
+        encapsulation dot1q
+        vlan-type dot1q 100
+    !
+    #配置vpws
+    vpws vpws1
+        interface eth-1gi 0/3/1/4.1
+        !
+        peer 4.4.4.4 vcid 3 encapsulation tagged
+        !
+    !
+    #配置vpls
+    vfi vpls1
+        vsi-id 100  #pw两端的vsi-id必须一致，否则vpls无法建立成功
+        interface eth-1gi 0/3/1/4.100
+        !
+        peer 2.2.2.2 vcid 10 encapsulation tagged
+        !
+    !
+    #配置ldp中的peer
+    mpls ldp
+        router-id 1.1.1.1
+        interface eth-1gi 0/3/1/1
+        !
+        targeted-peer ipv4 2.2.2.2
+        !
+        targeted-peer ipv4 4.4.4.4
+        !
+    !
+    ```
+    
+### 仪表常用配置
+
+1. 连接仪表后，配置需要打流的端口port。  
+2. 添加devices。  
+    + 配置对应的source ip和gateway。
+    + ARP/ND->start ARP/ND学习ARP。
+3. 添加三层流。  
+    + Add Bound Stream Block。
+    + port选择，源端口->目的端口。
+    + apply后，start ARP/ND进行学习arp。
+4. 可以利用capture来进行抓报。  
+

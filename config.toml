@@ -14,9 +14,9 @@ enableRobotsTXT = true
 #googleAnalytics = "UA-123-45"
 
 [params]
-title = "鬼灭之刃"
+title = "三体"
 author = "guowei"
-description = "以心为原动力，向着明日前进"  
+description = "给岁月以文明，而不是给文明以岁月。"  
 profilePicture = "images/profile.jpg"
 keywords = ""
 favicon = "favicons/"
