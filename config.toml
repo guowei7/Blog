@@ -14,9 +14,9 @@ enableRobotsTXT = true
 #googleAnalytics = "UA-123-45"
 
 [params]
-title = "故乡"
+title = "三体"
 author = "guowei"
-description = "希望是本无所谓有，无所谓无的。这正如地上的路，其实地上本没有路；走的人多了，也便成了路。"  
+description = "给岁月以文明，而不是给文明以岁月。"  
 profilePicture = "images/profile.jpg"
 keywords = ""
 favicon = "favicons/"

@@ -546,15 +546,596 @@ DisableComments: false
             >PE2----ASBR2====ASBR4----ASBR6====ASBR8----PE4
 
             这是一个三个AS域相连的网络，如果单纯在PE1上直接使用多跳显式路径建立到PE3的E2E SR-MPLS TE网络，则在AS x中，就可以决定AS y到AS z的流量路径，由于AS y与AS z可能和AS x隶属于不同的管理机构，所以这样的流量路径可能并不为AS y和AS z接受，而且标签栈深度太深也会降低转发效率。另一方面，AS y与AS z也可能和AS x使用不同的控制器，这也给PE1直接建立到PE3的E2E SR-MPLS TE网络带来困难。  
+            为了解决上述困难，设备做了限制，当显式路径第一跳是Binding SID时，该显式路径最多仅支持3跳，这样从PE1最多只能建立到ASBR5/ASBR6的跨域E2E SR-MPLS TE显式路径，而无法到达AS z。要想建立从AS x到AS z的跨多AS域E2E SR-MPLS TE隧道只能通过分层方式。  
+            分层建立跨多AS域E2E SR-MPLS TE隧道过程如下：  
+
+            1. 第一层：建立AS y到AS z的E2E SR-MPLS TE隧道。首先需要完成AS y和AS z域内SR-MPLS TE隧道创建，并且为域内隧道配置Binding SID，分别为Binding SID3和Binding SID5。其次在AS y和AS z域间配置BGP EPE，生成BGP Peer SID4之后控制器利用上述SID建立从AS y到AS z的跨域E2E SR-MPLS TE Tunnel1,可以为该隧道配置新的Binding SID6。  
+            2. 第二层：建立AS x到AS z的E2E SR-MPLS TE隧道。首先需要完成AS x域内SR-MPLS TE隧道创建，并且为域内隧道配置Binding SID，名为Binding SID1。其次在AS x和AS y域间配置BGP EPE，生成BGP Peer SID2.之后控制器利用Binding SID1、Peer SID2和Binding SID6建立从AS x到AS z的单向跨域E2E SR-MPLS TE Tunnel2。  
+            
+            以上就是跨3个AS域的E2E SR-MPLS TE隧道建立过程。如果超过3个AS域，还可以为E2E SR-MPLS TE Tunnel2分配新的Binding SID，然后利用次SID参与路径计算。按上述思路循环，可以进一步构建跨更多AS域的E2E SR-MPLS TE隧道。  
+
+    + 流量导入  
+        在SR LSP(SR-MPLS BE)或者SR-MPLS TE隧道建立成功以后，还需要将业务流量引入SR LSP或者SR-MPLS TE隧道。常用放法有静态路由、隧道策略、自动路由等。常见业务有公网业务、EVPN、L2VPN和L3VPN等。  
+        ***静态路由***  
+        SR LSP无Tunnel接口。可以配置静态路由指定下一跳，根据下一跳迭代SR LSP。  
+        SR-MPLS TE隧道上的静态路由没有什么特殊之处，它的工作方式和普通的静态路由一样。配置静态路由时，路由的出接口设置为SR-MPLS TE隧道的接口，即可按照该路由转发的流量导入SR-MPLS TE隧道。  
+        ***隧道策略***  
+        VPN流量通过隧道进行转发时，默认采用LDP LSP而非SR LSP或者SR-MPLS TE隧道。如果默认情况下不能满足VPN的需求，需要对VPN应用隧道策略，将VPN流量引入到SR LSP或者SR-MPLS TE隧道中。  
+        目前隧道策略包含如下两种，可以根据需要选择其中一种进行配置。  
+
+            * 按优先级顺序选择(Select-seq)方式：该策略可以改变VPN选择的隧道类型，按照配置的隧道类型优先级顺序将SR LSP或者SR-MPLS TE隧道选择为VPN的公网隧道。如果不存在LDP LSP，则默认选择SR LSP。  
+            * 隧道绑定(Tunnel Binding)方式：该策略可以为VPN绑定SR-MPLS TE隧道以保证QoS，将某个目的地址与某条SR-MPLS TE隧道进行绑定。  
+        ***自动路由***  
+        自动路由是指将SR-MPLS TE隧道看作逻辑链路参与IGP路由计算，使用隧道接口做为路由出接口。根据网络规划来决定某节点设备是否将LSP链路发布给邻居节点用于指导报文转发，配置自动路由方式有两种：  
+
+            * 转发捷径：此方式不将SR-MPLS TE隧道发布给邻居节点，因此，SR-MPLS TE隧道只能参与本地的路由计算，其他节点不能使用次隧道。  
+            * 转发邻接：此方式将SR-MPLS TE隧道发布给邻居节点，因此，SR-MPLS TE隧道将参与全局的路由计算，其他节点也能使用此隧道。  
+
+        ***策略路由***  
+        策略路由根据用户制定的策略进行路由选择，可应用于安全、负载分担等目的。在SR网络中，可使符合过滤条件的IP报文通过指定的LSP路径转发。  
+        SR-MPLS TE的策略路由的定义和IP单播策略路由完全一样，可以通过定义一系列匹配的规则和动作来实现，即将apply语句的出接口设置为SR-MPLS TE隧道的接口。如果报文不匹配策略路由规则，将进行正常IP转发;如果报文匹配策略路由规则，则报文直接从指定隧道转发。  
+
+        * 公网IP迭代SR隧道  
+            - BGP公网路由迭代SR隧道  
+                当用户访问互联网时，如果报文采用IP转发的话，则从用户到互联网上的核心设备都需要学习到大量的互联网路由，这给核心设备带来了很大的负担，影响核心设备的性能。为了解决这个问题，可以在用户的接入设备上配置非标签公网BGP路由或者非标签公网静态路由迭代SR隧道功能，让用户通过SR隧道转发访问互联网，这样就能解决核心设备性能不足，压力过大或者不希望核心路由承载业务等问题。  
+                按照下面的方式部署BGP公网路由迭代SR LSP:  
+
+                1. PE、P端到端部属IGP和Segment Routing，建立SR LSP。  
+                2. 在PE之间建立BGP Peer，学习对端路由。  
+                3. BGP业务路由在PE1处迭代SR LSP。  
+
+                >Internet==PE1==P1==P2==PE2==CE  
+                >==========||------BGP--------||====  
+                >ip->26100+ip->36100+ip->16100+ip->ip  
+
+                按照下面的方式部署BGP公网路由迭代SR-MPLS TE隧道:  
+
+                1. PE、P端到端部署IGP和Segment Routing，建立SR-MPLS TE隧道。  
+                2. 在PE之间建立BGP Peer，学习对端路由。  
+                3. 在PE上配置隧道策略，使BGP业务路由在PE1处迭代SR-MPLS TE隧道。  
+
+                >Internet==PE1=9001=P1=9002=P2=9003=PE2==CE  
+                >==========||-------------BGP-------------||==========  
+                >ip+(9003,9002,9001)->ip+(9003,9002)->ip+(9003)->ip->ip  
+
+            - 静态路由迭代SR隧道  
+                静态路由的下一跳有可能不是直接可达的，这样的路由不能指导转发，需要进行迭代。如果允许静态路由迭代SR隧道，则可以进行标签转发。  
+                按照下面的方式部署静态路由迭代SR LSP：  
+
+                1. PE、P端到端部署IGP和Segment Routing，PE1建立到PE2目的地址为Loopback接口地址的SR LSP。  
+                2. 在PE1上配置静态路由，指定下一跳为PE2的Loopback接口地址。  
+                3. PE1收到IP报文后封装标签，通过SR LSP进行报文转发。  
+
+                >Internet==PE1==P1==P2==PE2==CE  
+                >==========||-pe2 static route-||===
+                >ip->ip+26100->ip+36100->ip+16100->ip  
+
+                按照下面的方式部署静态路由迭代SR-MPLS TE隧道  
+
+                1. PE、P端到端部署IGP和Segment Routing，PE1建立到PE2目的地址为Loopback接口地址的SR-MPLS TE隧道。  
+                2. 在PE1上配置静态路由，指定下一跳为PE2的Loopback接口地址。  
+                3. 在PE上配置隧道策略，使PE迭代到SR-MPLS TE隧道，之后PE1收到IP报文后将进行标签转发。  
+
+                >Internet==PE1=9001=P1=9002=P2=9003=PE2==CE  
+                >==========||-Loopback static route-||=====  
+                >ip->ip+(9003,9002,9001)->ip+(9003,9002)->ip+(9003)->ip->ip  
+
+        * L3VPN迭代SR隧道  
+            - 基本VPN迭代SR隧道  
+                当用户访问互联网时，如果报文采用IP转发的话，则从用户到互联网的核心设备都需要学习到大量的互联网路由，这给核心设备带来了很大的负担，影响核心设备的性能。为了解决这个问题，可以配置VPN迭代SR隧道功能，让用户通过隧道访问互联网。  
+                网络是由一些不连续的L3子网VPN组成，中间跨域骨干网络，在PE之间建立SR LSP，用于转发L3VPN私网报文。PE设备使用BGP学习私网VPN路由。具体部属如下：  
+
+                1. PE两端部署IS-IS，实现路由可达。  
+                2. PE两端建立BGP邻居，学习对端VPN路由。  
+                3. PE建立ISIS SR隧道，实现公网标签分配，并计算标签转发路径。  
+                4. 通过BGP协议为VPN分配一个私网标签，例如Label Z。  
+                5. 私网路由迭代到SR LSP。  
+                6. PE1收到IP报文，封装私网标签，封装SR公网标签，按照标签转发路径进行转发。  
+
+                >CE1==PE1==P1==P2==PE2==CE2  
+                >=====||----BGP----||======    
+                >ip->ip+(Label Z+26100)->ip+(Label Z+36100)->ip+(Label Z)PHP->ip  
+
+                网络是由一些不连续的L3子网VPN组成，中间跨域骨干网络，在PE之间建立SR-MPLS TE隧道，用于转发L3VPN私网报文。PE设备使用BGP学习私网VPN路由。具体部署如下：  
+
+                1. PE两端部署IS-IS，实现路由可达。  
+                2. PE两端建立BGP邻居，学习对端VPN路由。  
+                3. PE建立IS-IS SR-MPLS TE隧道，实现公网标签分配，并计算标签转发路径。  
+                4. 通过BGP协议为VPN分配一个私网标签，列入Label Z。  
+                5. PE上配置隧道策略，允许私网路由迭代到SR-MPLS TE隧道。  
+                6. PE1收到IP报文，封装私网标签，封装SR公网标签，按照标签转发路径进行转发。  
+
+                >CE1==PE1=9001=P1=9002=P2=9003=PE2==CE2  
+                >=====||----------BGP----------||======  
+                >ip->ip+(Label Z+9003,9002,9001)->ip+(Label Z+9003,9002)->ip+(Label Z+9003)->ip+(Label Z)->ip  
+
+            - HVPN迭代SR隧道  
+                随着网络规模的不断扩大，业务种类不断增加，部署PE设备经常会遇到接入能力或者路由能力的扩展性问题，从而导致整个网络的性能和可扩展性将受到影响，不利于大规模部署VPN。HVPN是具有层次化的VPN网络，由多个PE承担不同的角色，并形成层次结构，共同完成一个PE的功能，以降低对PE设备的性能要求。  
+
+                1. UPE/SPE/NPE设备之间建立BGP Peer，并建立SR LSP  
+                2. 在UPE设备，将VPNv4路由迭代到SR LSP.  
+
+                HVPN报文转发过程(CE1向CE2发送报文)如下：  
+
+                1. CE1向UPE发送一个VPN报文。  
+                2. UPE收到报文后，查询私网转发表，通过匹配报文目的地址，查找到用于转发报文的隧道，然后给报文打上私网标签L4和外层SR公网标签Lv，通过隧道将报文发给SPE，标签栈为L4/Lv;  
+                3. SPE收到报文后，弹出外层SR公网标签Lv，交换私网标签为L3,打上外层SR公网标签Lu，沿隧道将报文转发给NPE，标签栈为L3/Lu;  
+                4. NPE收到报文后，弹出外层SR公网标签Lu，根据内层标签L3找到对应的VPN实例，然后根据报文目的地址在该VPN实例的私网转发表中查找到出接口。NPE将报文从对应出接口发送给CE2.此时报文为纯IP报文。  
+
+                >VPN1 Site1==CE1==UPE==SPE==NPE==CE2==VPN1 Site2  
+                >================||-BGP-||-BGP-||===============  
+                >Payload->Payload+(L4+Lv)->Payload+(L3+Lu)->Payload  
+
+            - VPN FRR  
+                PE1设备会同时收到PE3和PE4发布的路由，并且优选PE3发布的路由，PE4发布的路由做为次优路由。PE1将最优路由和次优路由都要填写在转发项中，其中最优路由用于指导业务流量转发，而次优路由作为备份路由。  
+
+                >====PE1==P1==P3==PE3====  
+                >CE1=||===||==||===||=CE2  
+                >====PE2==P2==P4==PE4====  
+
+                |故障点|保护倒换|  
+                |:--:|:--:|  
+                |P1->P3链路故障|TI-LFA局部保护生效，流量切换到PE1-P1-P2-P4-P3-PE3|
+                |PE3接点故障|BFD for SR-MPLS TE或SBFD for SR-MPLS可以感知，BFD/SBFD会触发VPN FRR切换到PE1-PE2-P2-P4-PE4|  
+
+        * L2VPN迭代SR隧道  
+            VPLS的典型组网，处于不同物理位置的用户同国接入不同的PE设备，实现用户之间的互相通信。从用户的角度来看，整个VPLS网络就是一个二层交换网，用户之间就像直接通过LAN互连在一起一样。用户通过配置VPLS迭代SR隧道，每个VPN的各个Site之间建立虚连接，公网SR隧道建立以后，二层报文就可以进入SR隧道转发。  
+
+            - VPLS迭代SR LSP  
+                VPLS迭代SR LSP流程如下：  
+
+                1. CE1发送经过二层封装的报文到PE1。  
+                2. PE1建立到PE2的端到端SR LSP。  
+                3. PE1配置隧道策略，选择SR LSP，VSI转发表项关联到SR转发表项。  
+                4. PE1收到报文，查找对应的VSI中的表项，为该报文选择隧道和PW。PE1根据选择的隧道和PW，为该报文直接打上外层LSP标签和内层VC标签，再进行二层封装后转发。  
+                5. PE2收到从PE1发送来的报文，对该报文进行解封装。  
+                6. PE2把解封装后的CE1原始二层报文发送给CE2。  
+
+                >VPN1 Site1==CE1==PE1==P1==P2==PE2==CE2==VPN1 Site2  
+                >=================||--SR LSP+PW--||================  
+                >ip+L2 head->ip+L2 head+(VC Label+16100)+L2 head->ip+L2 head+(VC Label+16100)+L2 head->ip+L2 head+(VC Label)+L2 head PHP->ip+L2 head  
+
+                HVPLS迭代SR LSP、VLL迭代SR LSP场景与VPLS迭代SR LSP流程类似。  
 
 
-    + 流量导入
+            - VPLS迭代SR-MPLS TE隧道
+                VPLS迭代SR-MPLS TE隧道流程如下：  
+
+                1. CE1发送经过二层封装的报文到PE1。  
+                2. PE1建立到PE2的端到端SR-MPLS TE隧道。  
+                3. PE1配置隧道策略，选择SR-MPLS TE隧道，VSI转发表项关联到SR转发表项。  
+                4. PE1收到报文，查找对应的VSI中的表项，为该报文选择隧道和PW。PE1根据选择的隧道和PW，为该报文直接打上外层SR-MPLS TE隧道标签和内层VC标签，再进行二层封装后转发。  
+                5. PE2收到从PE1发送来的报文，对该报文进行解封装。  
+                6. PE2把解封装后的CE1原始二层报文发送给CE2。  
+
+                >VPN1 Site1==CE1==PE1=9001=P1=9002=P2=9003=PE2==CE2==VPN1 Site2  
+                >=================||--SR-MPLS TE--||===============  
+                >ip+L2 head->ip+L2 head+(VC Label+9003,9002,9001)+L2 head->ip+L2 head+(VC Label+9003,9002)+L2 head->ip+L2 head+(VC Label+9003)+L2 head->ip+L2 head+(VC Label)+L2 head->ip+L2 head  
+
+        * EVPN迭代SR隧道
+            EVPN(Ethernet Virtual Private Network)是一种用于二/三层网络互联的VPN技术。EVPN技术采用类似于BGP/MPLS IP VPN的机制，通过扩展BGP协议，使用扩展后的可达性信息，使不同站点的二层网络间的MAC地址学习和发布过程从数据平面转移到控制平面。与VPLS相比，EVPN技术可以解决VPLS技术存在的无法实现负载分担、网络资源消耗高的问题。  
+            - EVPN迭代SR LSP  
+                当PE学到其他站点的MAC地址且公网SR LSP建立成功后，则可以向其他站点传输单播报文，其具体转发过程如下：  
+
+                1. CE1将单播报文以二层转发的方式发送至PE1； 
+                2. PE1收到报文后，先封装MAC表项携带的私网标签，在封装公网SR LSP标签，然后将封装后的单播报文发送至PE2;  
+                3. PE2收到封装后的单播报文后，将进行解封装，弹出私网标签，查对应私网MAC表，找到相应的出接口。  
+
+                >EVPN1 Site1==CE1==PE1==P1==P2==PE2==CE2==EVPN1 Site2  
+                >==================||----SR LSP--||==================  
+                >L2 Payload->L2 Payload+(Private Label+16100)->L2 Payload+(Private Label+16100)->L2 Payload+(Private Label) PHP->L2 Payload  
+
+            - EVPN迭代SR-MPS TE隧道  
+                当PE学到其他站点的MAC地址且公网SR-MPLS TE隧道建立成功后，则可以向其他站点传输单播报文，其具体传输过程如下：  
+
+                1. CE1将单播报文以二层转发的方式发送至PE1； 
+                2. PE1收到报文后，先封装MAC表项携带的私网标签，再封装公网SR-MPLS TE隧道标签，然后将封装后的单播报文发送至PE2;  
+                3. PE2收到封装后的单播报文后，将进行解封装，弹出私网标签，查对应私网MAC表，找到相应的出接口。  
+
+                >EVPN1 Site1==CE1==PE1=9001=P1=9002=P2=9003=PE2==CE2==EVPN1 Site2  
+                >==================||-------SR-MPLS TE-------||============  
+                >L2 Payload->L2 Payload+(Private Label+9003,9002,9001)->L2 Payload+(Private Label+9003,9002)->L2 Payload+(Private Label+9003)->L2 Payload+(Private Label)->L2 Payload  
+
     + SBFD for SR-MPLS
-    + SR-MPLS TE Policy
-    + TI-LFA FRR
-    + Anycast FRR
+        BFD技术相对成熟，但当配置大量BFD会话进行链路检测时，BFD现有状态机的协商时间会变长，成为整个系统的一个瓶颈。SBFD(Seamless Bidirectional Forwarding Detection)是BFD的一种简化机制，SBFD简化了BFD的状态机，缩短了协商时间，提高了整个网络的灵活性，能够支撑SR隧道检测。  
+
+        + SBFD工作原理  
+            SBFD工作原理如图所示。SBFD分为发起端和反射端，在链路检测之前，发起端和反射端通过互相发送SBFD控制报文(SBFD Control Packet)通告SBFD描述符(Discriminator)等信息。链路检测时，发起端主动发送SBFD Echo报文，反射端根据本端情况环回此报文，发起端根据反射报文决定本端状态。  
+
+            * 发起端做为检测端，有SBFD状态机机制和检测机制。发起端状态机只有Up和Down状态，发出的报文也只有Up和Down状态，只能接收Up或Admin Down状态报文。  
+            SBFD报文由发起端首先向反射端发送，报文初始状态为Down。报文目的端口号为7784,报文的源端口号为4784,目的IP为用户配置的127网段的任意IP地址，源IP地址为本端设备上配置的LSR ID。  
+            * 反射端无SBFD状态机，无检测机制，不会主动发送SBFD Echo报文，仅用于构造环回SBFD报文。  
+            反射端接收到发起端的SBFD报文，检查报文中SBFD描述符是否与本地配置的全局SBFD描述符匹配，不匹配则丢弃;如果匹配并且反射端处于工作状态，则构造环回SBFD报文，反射端不处于工作状态，则将报文状态置为Admin Down。  
+            反射端所构造报文的目的端口号为4784,报文的源端口号为7784,源IP地址为本端设备配置的LSR ID，目的IP为发起端的源IP地址。  
+
+            >发起端==================反射端  
+            >||--SBFD Control packet-->||
+            >||<--SBFD Control pcaket--||
+            >||----SBFD Echo packet----||
+            >||<-----------------------||
+
+        + SBFD发起端状态机  
+            SBFD发起端状态机只有Up和Down两个状态，也只能在这两个状态间转变，如下图：  
+
+            >||--------Up--------||  
+            >Down================UP  
+            >||-Admin Down,Timer-||  
+
+            1. 初始状态：SBFD报文由发起端首先向反射端发送，发起端初始状态为Down。  
+            2. 状态迁移：发起端收到反射端发回的Up报文则将本地状态置为Up。发起端收到反射端返回Admin Down报文，则将状态置为Down。发起端在定时器超时前收不到返回报文，也将状态置为Down。  
+            3. 状态保持：发起端处于Up状态，如果收到反射端返回的Up报文，则本地状态持续维持在Up状态。发起端处于Down状态，如果收到反射端返回的Admin Down报文或者在定时器超时前收不到返回报文，则本地状态持续维持在Down状态。  
+
+        + SBFD典型应用  
+            SBFD应用到SR场景检测时，主要有SBFD for SR LSP(SR-MPLS BE)和SBFD for SR-MPLS TE两种场景。在SBFD检测SR-MPLS场景，SBFD发起端到反射端路径走SR-MPLS标签路径转发，反射端向发起端回程报文走多跳IP路径。  
+
+            1. SBFD for SR LSP  
+                下面以VPN迭代到SR LSP为例，描述SBFD for SR LSP的应用场景，如下图所示：  
+                图中所有PE和P设备上SRGB范围都是[16100-16100]。A、CE1、CE2、E部署在同一个VPN中，CE2发布一条到E的路由。PE2为到E的路由分配VPN标签，然后同国MP-BGP邻居发布给PE1,PE1接收携带VPN标签的VPN路由，并将路由下发到转发表。  
+                当A发送目的地为E的报文时，报文在PE1节点根据报文所属VPN封装VPN标签，根据报文目的地址迭代SR LSP，然后封装SR标签16100,之后报文沿着主路径PE1->P4->P3->PE2进行逐跳转发。  
+                应用了SBFD检测后，当主路径某条链路或者某台P设备发生故障时，PE1会快速检测到故障发生，使数据流量切换到备份SR LSP。  
+
+                >A========P1=(Backup SR LSP)=P2========E  
+                >CE1==PE1=======================PE2==CE2  
+                >=========P4=(Primary SR LSP)=P3========  
+                >Payload+IP head->Payload+IP head+(VPN label+16100)->...->Payload+IP head  
+
+            2. SBFD for SR-MPLS TE LSP
+                下面以VPN迭代到SR-MPLS TE LSP为例，描述SBFD for SR-MPLS TE LSP的应用场景，如下图所示：  
+
+                >A========P1=(Backup SR LSP)=P2==========E  
+                >CE1==PE1=========================PE2==CE2  
+                >=========P4=(Primary SR LSP)=P3==========  
+                >Payload+Ip head->Payload+Ip head+(VPN label+9005,9003,9004)->Payload+Ip head+(VPN label+9005,9003)->Payload+Ip head+(VPN label+9005)->Payload+Ip head+(VPN label)->Payload+IP head  
+
+                A、CE1、CE2、E部署在同一个的VPN中，CE2发布一条到E的路由。PE2为E分配VPN标签。PE1安装到E的路由，VPN标签。  
+                PE1到PE2的SR-MPLS TE Tunnel的路径为PE1->P4->P3->PE2,标签栈为{9004,9003,9005}。当A发送目的地为E的报文时，报文在PE1时根据9004找到出接口，发出时被打上三层标签，9003、9005和最内层的VPN标签为PE2分配的。应用了SBFD检测后，当主路径某条链路或者某台P设备发生故障时，PE1会快速检测到故障发生，并将数据流量切换到备份SR-MPLS TE LSP。  
+
+            3. SBFD for SR-MPLS TE Tunnel  
+                SR-MPLS TE隧道状态要结合SBFD for SR-MPLS TE Tunnel与SBFD for SR-MPLS TE LSP检测。  
+                SBFD for SR-MPLS TE LSP用来控制主备LSP的切换状态，SBFD for SR-MPLS TE Tunnel用来保证Tunnel的真实状态。  
+
+                * 如果不配置SBFD for SR-MPLS TE Tunnel，Tunnel默认状态只为UP，Tunnel的真实状态不确定。  
+                * 如果配置了SBFD for SR-MPLS TE Tunnel，但是SBFD的状态被置为管理Down，则SBFD实际未工作，隧道接口状态是unknown。  
+                * 如果配置了SBFD for SR-MPLS TE Tunnel，且SBFD没有被置为管理Down，则隧道接口状态与BFD状态一致。  
+
+    + SR-MPLS TE Policy  
+        SR-MPLS TE Policy是在SR技术基础上发展的一种新的隧道引流技术。SR-MPLS TE Policy路径表示为指定路径的段列表(Segment List)，称为SID列表(Segment ID List)。每个SID列表是从源到目的地的端到端路径，并指示网络中的设备遵循指定的路径，而不是遵循IGP计算的最短路径。如果数据包被导入SR-MPLS TE Policy中，SID列表由头端添加到数据包上，网络的其余设备执行SID列表中嵌入的指令。  
+        SR-MPLS TE Policy包括以下三个部分：  
+
+        * 头端(HeadEnd):SR-MPLS TE Policy生成的节点。  
+        * 颜色(Color):SR-MPLS TE Policy携带的扩展团体属性，携带相同Color属性的BGP路由可以使用该SR-MPLS TE Policy。  
+        * 尾端(EndPoint):SR-MPLS TE Policy的目的地址。  
+
+        Color和End Point信息通过配置添加到SR-MPLS TE Policy。SR-MPLS TE Policy在算路时按照代表业务SLA要求的Color属性计算转发路径，业务网络头端通过路由携带的Color属性和下一跳信息来匹配对应的SR-MPLS TE Policy实现业务流量转发。Color属性定义了应用级的网络SLA策略，可基于特定业务SLA规划网络路径，实现业务价值细分，构建新的商业模式。  
+
+        ***SR-MPLS TE Policy模型***
+        SR-MPLS TE Policy模型如下图所示。一个SR-MPLS TE Policy可以包含多个候选路径(Candidate Path)。候选路径携带优先级属性(Preference)。优先级最高的有效候选路径做为SR-MPLS TE Policy的主路径，优先级次高的有效路径做为SR-MPLS TE Policy的热备份路径。  
+        一个候选路径可以包含多个Segment List，每个Segment List携带Weight属性(当前不支持设置，默认为1)。每个Segment List都是一个显式标签栈，Segment List可以指示网络设备转发报文。多个Segment List之间可以形成负载分担。  
+
+        >==============================================|-Segment List 11+Weight
+        >==================|-Candidate Path+Preference |====================
+        >==================|===========================|-Segment List 1m+Weight
+        >SR-MPLS TE Policy |===================================================
+        >==================|===========================|-Segment List n1+Weight
+        >==================|-Candidate Path+Preference |=======================
+        >==================|===========================|-Segment List nm+weight
+
+        ***BGP SR-MPLS TE Policy扩展***  
+        BGP SR-MPLS TE Policy扩展有两个主要用途  
+        
+        1. 控制器上动态生成的SR-MPLS TE Policy需要通过BGP扩展传递给转发器。该功能通过新定义的SAFI，即BGP SR-MPLS TE Policy地址族来实现。在控制器和转发器之间建立BGP SR-MPLS TE Policy地址族邻居，可以让控制器下发SR-MPLS TE Policy给转发器，提高了网络自动化部署SR-MPLS TE Policy的能力。  
+        2. 支持新增的扩展团体属性(Color属性)，并且可以在BGP邻居之间传递。该功能通过BGP NLRI扩展来实现。  
+
+        BGP SR-MPLS TE Policy地址族使用的NLRI格式如下：  
+
+        >NLRI Length(1 octet)+Distinguisher(4 octets)+Policy Color(4 octets)+Endpoint(4 or 16 octets)  
+
+        包含SR-MPLS TE Policy的NLRI在BGP Update消息中携带，Update消息也必须携带BGP必选属性，另外，也可以携带任何BGP可选属性。  
+        SR-MPLS TE Policy的内容在隧道封装属性(Tunnel Encapsulation Attribute)中使用新的隧道类型TLV(Tunnel-Type TLV)进行编码。  
+
+        Tunnel-Type TLV包含有多个Sub-TLV。  
+
+        * Preference Sub-TLV  
+        * Binding SID Sub-TLV  
+        * Segment List Sub-TLV  
+        * Policy Priority Sub-TLV  
+        * Extended Color Community  
+
+        BGP本身不产生SR-MPLS TE Policy，可以从控制器接收SR-MPLS TE Policy NLRI，并且生成SR-MPLS TE Policy。BGP接收SR-MPLS TE Policy NLRI时，需要做以下检查：  
+
+        * SR-MPLS TE Policy NLRI必须包含Distinguisher、Policy Color和Endpoint。  
+        * SR-MPLS TE Policy NLRI的Update消息必须包含NO_ADVERTISE团体属性，或者包含IPv4地址形式的route-target扩展团体属性。  
+        * SR-MPLS TE Policy NLRI的Update消息必须包含隧道封装属性(Tunnel Encapsulation Attribute),而且必须有一个隧道封装属性(Tunnel Encapsulation Attribute)。  
+
+        ***SR-MPLS TE Policy的MTU***  
+        如果一个SR-MPLS TE Policy的实际转发路径中有不同的物理链路类型，可能不同的链路支持的MTU各不相同，就需要在头节点做好MTU控制，防止报文在传输过程中被切片或丢弃。目前IGP/BGP并没有实现对MTU的传递或协商的机制，用户可以为SR-MPLS TE Policy单独配置MTU。  
+        ***SR-MPLS TE Policy的MBB与慢删机制***  
+        SR-MPLS TE Policy支持MBB(make before break)。在SR-MPLS TE Policy的Segment List更新过程中，转发器在拆除老的Segment List之前先把新的Segment List建立起来，这期间流量先保持按照老的Segment List转发，防止路径切换导致流量丢失。  
+        SR-MPLS TE Policy支持慢删机制。配置Segment List延迟删除时间后，如果SR-MPLS TE Policy下有更优的Segment List，系统可能会进行Path切换，此时SR-MPLS TE Policy下原有处于Up状态的Segment List仍旧可以使用，系统将等待延迟时间超时以后才将原有Segment List删除，防止Path切换震荡导致流量不通。  
+        慢删机制仅对SR-MPLS TE Policy下处于Up状态的Segment List(包括备份Segment List)生效。如果SBFD检测到Segment List故障，或者没有获取到Segment List真实状态，则系统认为Segment List不可用，此时会立即删除Segment List，而不进行任何延时。  
+
+        1. SR-MPLS TE Policy创建  
+            SR-MPLS TE Policy可以在转发器上静态配置(CLI/Netconf)，也可以由控制器上动态生成然后传递给转发器(BGP)。相对来说，动态方式更利于网络自动化部署。存在多个方式产生的相同SR-MPLS TE Policy时，转发器按照如下原则选择SR-MPLS TE Policy。  
+
+            * SR-MPLS TE Policy的来源(protocol-Origin):通过BGP接收的SR-MPLS TE Policy默认取值是20,静态配置的SR-MPLS TE Policy默认取值是30。取值越大，优先级越高。  
+            * SR-MPLS TE Policy的<ASN,node-address>:其中ASN是AS编号。ASN和node-address都是取值越小，优先级越高。对于静态配置的SR-MPLS TE Policy，目前ASN固定取值是0;node-address固定取值是0.0.0.0。  
+            * Discriminator：取值越大，优先级越高。对于静态配置的SR-MPLS TE Policy，Discriminator固定取preference的值。  
+
+            ***静态配置SR-MPLS TE Policy***  
+            用户可以通过CLI/Netconf静态配置SR-MPLS TE Policy。其中静态配置SR-MPLS TE Policy时，Endpoint、Color、候选路径的Preference和Segment List等都是必须配置。静态配置时，同一个SR-MPLS TE Policy下候选路径的Preference不允许重复。  
+            Segment List第一跳标签支持Node标签、Adjacency标签，以及BGP EPE标签、并行标签、Anycast SID标签，不支持Binding SID。需要特别注意的是，Segment List的第一跳标签必须是本地的入标签，转发平面会根据这个标签值在本地查找转发表项。  
+
+            ***控制器下发SR-MPLS TE Policy***  
+            控制器下发SR-MPLS TE Policy过程如下：
+
+            1. 控制器通过BGP-LS收集网络拓扑和标签信息。  
+            2. 控制器与头端转发器之间建立IPv4 SR-MPLS TE Policy地址族的BGP邻居。  
+            3. 控制器计算SR-MPLS TE Policy，然后通过BGP邻居下发给头端。头端生成SR-MPLS TE Policy表项。  
+
+        2. SR-MPLS TE Policy流量导入  
+            ***路由着色***  
+            路由着色是指通过路由策略对路由增加扩展团体属性Color，携带Color的路由可以根据Color与下一跳地址迭代SR-MPLS TE Policy。  
+            路由着色的过程如下：  
+
+            1. 配置路由策略，匹配特定路由，设置特定的Color属性。  
+            2. 将路由策略应用到BGP邻居，或者应用到整个VPN实例，可以作为入口策略，也可以作为出口策略。  
+
+            ***Color引流***  
+            Color引流时，直接基于路由的扩展团体属性Color和目的地址迭代到SR-MPLS TE Policy。  
+            整个过程简述如下：  
+
+            1. 通过控制器向头端设备A下发SR-MPLS TE Policy，SR-MPLS TE Policy的Color是123,EndPoint是设备B的地址10.1.1.3。  
+            2. 在设备B上配置BGP出口策略或者VPN出口策略(也可以在设备A上配置BGP入口策略或者VPN入口策略)，为路由前缀10.1.1.0/24设置扩展团体属性Color 123，路由下一跳是设备B的地址10.1.1.3。然后路由通过BGP邻居发送给设备A。  
+            3. 在头端设备A上配置隧道策略，然后当设备A接收到BGP路由10.1.1.0/24后，根据路由的扩展团体属性123和下一跳10.1.1.3迭代到SR-MPLS TE Policy。转发时，为到10.1.1.0/24的报文添加一个具体的标签栈<C，E，G，B>。  
+
+            ***DSCP引流***  
+            DSCP引流时，不支持按照Color进行路由迭代，而是根据路由的目的地址迭代隧道策略，利用Endpoint匹配到SR-MPLS TE Policy Group，然后再根据报文携带的DSCP查找到对应的SR-MPLS TE Policy转发。  
+
+        3. SR-MPLS TE Policy数据转发  
+            ***域内数据转发***  
+            域内数据转发依赖于域内SR-MPLS TE Policy转发表项的建立，域内SR-MPLS TE Policy转发表项的建立过程如下：  
+
+            1. 控制器下发SR-MPLS TE Policy给头端A设备。  
+            2. 尾端B设备发布BGP路由10.1.1.0/24给头端A设备，BGP路由的下一跳是B设备的地址10.1.1.3/32。  
+            3. 在头端A设备上配置隧道策略。A设备在接收到BGP路由以后，利用路由的Color和下一跳迭代到SR-MPLS TE Policy，SR-MPLS TE Policy的标签栈是<20003,20005,20007,20002>。  
+
+            数据转发的过程如下：头端A设备查找到SR-MPLS TE Policy，然后为到10.1.1.0/24的报文压入标签栈<20003,20005,20007,20002>。设备C，E，G收到SR-MPLS TE报文后，都进POP操作，最终由G设备将报文转发给B设备。B设备收到报文后，根据报文的目的地址做进一步处理。  
+
+            ***跨域数据转发***  
+            跨域数据依赖于跨域SR-MPLS TE Policy转发表项的建立，跨域SR-MPLS TE Policy建立过程如下：  
+
+            1. 控制器向AS 200头端设备ASBR3下发域内的SR-MPLS TE Policy，SR-MPLS TE Policy的Color是123，EndPoint是PE1的地址10.1.1.3，Binding SID是30028。  
+            2. 控制器向AS 100头端设备CSG1下发跨域的E2E SR-MPLS TE Policy，SR-MPLS TE Policy的Color是123,EndPoint是PE1的地址10.1.1.3。其中Segment List将AS 100域内标签，域间BGP Peer-Adj标签和AS 200的Binding SID标签组合起来，即<102,203,3040,30028>  
+            3. 在PE1上配置BGP出口策略或者VPN出口策略，为路由前缀10.1.1.0/24设置Color数性23,路由下一跳是PE1的地址10.1.1.3。然后路由通过BGP邻居发布给CSG1。  
+            4. 在头端设备CSG1上配置隧道策略。CSG1接收到BGP路由10.1.1.0/24后，利用路由的Color和下一跳迭代到E2E SR-MPLS TE Policy，SR-MPLS TE Policy的标签栈是<102,203,3040,30028>。  
+
+            跨域数据转发过程如图所示：  
+
+            1. 入节点CSG1为数据报文添加标签栈{102,203,3040,30028}。然后根据102标签查找转发出接口，对应为CSG1->AGG1邻接，之后将标签102弹出。报文携带标签栈<203,3040,30028>，通过CSG1->AGG1邻接向下游节点AGG1转发。  
+            2. AGG1收到报文后，根据栈顶的标签203匹配邻接，找到对应的转发出接口为AGG1->ASBR1邻接，之后将标签203弹出。报文携带标签栈<3040,30028>，通过AGG1->ASBR1邻接向下游节点ASBR1转发。  
+            3. ASBR1收到报文后，根据栈顶的标签3040匹配邻接，找到对应的转发出接口为ASBR1->ASBR3邻接，之后将标签3040弹出。报文携带标签栈<30028>，通过ASBR1->ASBR3邻接向下游节点ASBR3转发。  
+            4. ASBR3收到报文后，根据栈顶的标签30028查表，30028是Binding SID标签，对应标签栈<405,406>。然后根据405标签查找转发出接口，对应为ASBR3->P1邻接，之后将标签405弹出。报文携带标签栈<506>，通过ASBR3->P1邻接向下游节点P1转发。  
+            5. P1收到报文后，根据栈顶的标签506匹配邻接，找到对应的转发出接口为P1->PE1邻接，之后将标签506弹出。报文此时不携带标签，通过P1->PE1邻接向目的节点PE1转发。PE1收到报文后根据报文的目的地址做进一步处理。  
+
+        4. SBFD for SR-MPLS TE Policy  
+            与RSVP-TE可以通过转发器相互发送Hello消息维持隧道状态不同，SR-MPLS TE Policy不会通过转发器之间互相发送消息来维持自身状态。只要头节点标签栈下发，SR-MPLS TE Policy就会建立成功，且除了撤销标签栈之外，SR-MPLS TE Policy不会出现Down的情况。所以SR-MPLS TE Policy故障检测需要依靠部署SBFD检测，通过SBFD故障检测切换备份路径。SBFD for SR-MPLS TE Policy是一种端到端的快速检测机制，用于快速检测SR-MPLS TE Policy所经过的链路中所发生的故障。  
+            SBFD for SR-MPLS TE Policy检测过程如下：  
+
+            1. 头节点使能SBFD for SR-MPLS TE Policy后，头节点默认将EndPoint地址(只支持IPv4地址)作为对应Segment List的SBFD的远端描述符。SR-MPLS TE Policy不存在多个Segment List时，则多个SBFD会话的远端描述符相同。  
+            2. 头节点对外发送SBFD报文，SBFD报文封装SR-MPLS TE Policy对应的标签栈。  
+            3. 尾节点收到SBFD报文后，通过IP链路按照最短路径发送回应报文。  
+            4. 头节点如果收到SBFD回应报文，则认为SR-MPLS TE Policy的Segment List正常，否则会认为Segment List故障。如果一个候选路径下所有Segment List都发生故障，则SBFD触发候选路径切换。  
+
+            由于SBFD返程走IP转发，所以当两点间有多个SR-MPLS TE Policy主路径因为约束条件各不相同的时侯，SBFD检测报文返程走的路径却是共享的，返程的路径故障容易引起所有经过的SBFD报Down，进而导致两点间的所有SR-MPLS TE Policy Down。同一个SR-MPLS TE Policy下多个Segment List的SBFD会话存在同样的问题。  
+            默认情况下，如果SR-MPLS TE Policy没有使能HSB保护，SBFD仅检测SR-MPLS TE Policy里优先级最高的Candidate Path里的所有Segment List。使能HSB保护以后，SBFD可以同时检测SR-MPLS TE Policy里优先级最高和次高的两条Candidate Path里的所有Segment List，如果优先级最高的Candidate Path里所有Segment List都产生故障，将触发HSB切换。  
+
+        5. SR-MPLS TE Policy故障切换  
+            通过SBFD for SR-MPLS TE Policy 可以检测Segment LIst的可靠性，如果Segment List发生故障，将触发SR-MPLS TE Policy的鼓掌切换。  
+            如图所示，SR-MPLS TE Policy1的头端是PE1，尾端是PE2。另外SR-MPLS TE Policy2的头端是PE1，尾端是PE3。SR-MPLS TE Policy1和SR-MPLS TE Policy2可以形成VPN FRR。SR-MPLS TE Policy1下形成了主path和备份path组成的Hot-standby保护。Segment List指定的是到P1、P2、PE2的Node标签，Segment List 1可以直接使用SR-MPLS的所有保护技术，例如TI-LFA FRR。  
+
+            >================P5(20011)==P6(20012)====================
+            >=========1==P1(20003)2=3=P2(20005)4=5=PE2(20007)========
+            >CE1==PE1(20001)===============================CE2=======
+            >============P3(20004)====P4(20006)====PE3(20008)========
+
+            SR-MPLS TE Policy标签栈信息  
+
+            >VPN FRR---SR-MPLS TE Policy1|--Main path---Segment List 1---TI-LFA
+            >============================|--Backup path---Segment List 2=======
+            >=======|--SR-MPLS TE Policy2---Main Path---Segment List 3=========
+
+            * 当故障点1、3、5故障时：PE1、P1、P2上TI-LFA局部保护生效。PE1上对应Segment List1的SBFD如果在局部保护恢复流量之前就检测到故障，则SBFD联动将Setment List1置Down，并且通知SR-MPLS TE Policy1切换到备份Path Segment List2。  
+            * 当故障点2、4故障时：无局部保护，依赖SBFD感知节点故障，并将Segment List1置Down，SR-MPLS TE Policy1切换到备份Path Segment List2。  
+            * 当PE2节点故障时：SR-MPLS TE Policy1的所有候选Path都不可用，则SBFD可以感知，并且将SR-MPLS TE Policy1置Down，同时触发VPN FRR切换到SR-MPLS TE Policy2。  
+
+        6. SR-MPLS TE Policy OAM
+            SR-MPLS TE Policy OAM(Operations,Administration,and Maintenance)主要用于监控SR-MPLS TE Policy的连通性，快速进行SR-MPLS TE Policy的故障检测。SR-MPLS TE Policy OAM当前主要通过Ping/Tracert来实现。  
+            SR-MPLS TE Policy是对与Path的策略控制，Path是真正的SID栈路径。SR-MPLS TE Policy的检测有两个层次：  
+            
+            1. Policy层次的检测：一个SR-MPLS TE Policy下面可以配置多条候选路径(Candidate Path)，优先级最高的有效路径是主用Path，优先级次高的有效路径是备份Path。在同一个Candidate Path中多条Segment List可以进行负载分担。多个SR-MPLS TE Policy也可能配置相同的Candidate Path。SR-MPLS TE Policy层次的检测，实际是检测SR-MPLS TE Policy的主用Path和备份Path。  
+            2. Candidate Path层次的检测：属于基础的检测，不涉及上层Policy的策略业务，仅仅检测某条Candidate Path是否正常。  
+
+            基于Policy层次的检测，只要找到优选的主备Path，检测方案就等同于Candidate Path层次的检测。主备Path里面如果有多条Segment List，Ping和Tracert会对所有Segment List采用相同的流程进行遍历检测，而且都会生成检测结果。  
+
+            ***SR-MPLS TE Policy Ping***  
+            公网PE和P设备都具有SR能力，PE1到PE2方向建立SR-MPLS TE Policy，SR-MPLS TE Policy仅有一个主Path，其Segment List是PE1->P1->p2->PE2。  
+
+            >CE1===PE1===P1===P2===PE2===CE2  
+
+            从PE1节点上发起对该SR-MPLS TE Policy的Ping检测的工作过程如下：  
+
+            1. PE1构造MPLS Echo Request报文，该报文的IP首部目的地址为127.0.0.0/8,源IP地址是MPLS LSR ID，MPLS标签按照SR-MPLS TE Policy下的Segment List进行封装。  
+            需要注意的是，在Adjacency SID场景下，头节点PE1感知的FEC仅是P1的，Ping报文到达尾节点PE2后，PE2校验FEC会失败。所以在这种场景下，为了保证尾节点FEC校验能够通过，检测报文需要封装nil_FEC。  
+            2. PE1将报文按照SR-MPLS TE Policy的显式路径标签栈逐跳转发给PE2。  
+            3. P2将收到报文的最外层标签弹出，然后将报文转发给PE2,此时标签都已弹出，报文将上送主机收发模块进行处理。  
+            4. PE2处理报文后，然后构造MPLS Echo Reply报文返回给PE1，其中报文目的地址是PE1的MPLS LSR ID。由于返程报文没有绑定SR-MPLS TE Policy，所以沿着IP路径转发。  
+            5. PE1收到回程IP报文后，生成Ping检测结果。  
+
+            如果存在主备Path，且主备Path下有多条Segment List，Ping会对所有Segment List进行遍历检测。  
+
+            ***SR-MPLS TE Policy Tracert***  
+            从PE1节点上发起对该SR-MPLS TE Policy的Tracert检测的工作过程如下：  
+
+            1. PE1构造MPLS Echo Request报文，该报文的IP首部目的地址为127.0.0.0/8，源IP地址是MPLS LSR ID，MPLS标签按照SR-MPLS TE Policy下的Segment List进行封装。  
+            2. PE1将报文转发给P1，P1判断最外层标签TTL-1是否为0：  
+                - TTL-1等于0：MPLS TTL超时上送主机收发模块进行处理。  
+                - TTL-1大于0：将最外层MPLS标签弹出，缓存下最外层MPLS标签(TTL-1);把缓存下的最外层MPLS标签(TTl-1)复制到当前的最外层MPLS标签中，查转发表出接口，将报文转发给P2。  
+            3. P2的处理同P1，P2判断最外层标签TTL-1是否为0：  
+                - TTL-1等于0：MPLS TTL超时上送主机收发模块进行处理。  
+                - TTL-1大于0：将最外层MPLS标签弹出，缓存下最外层MPLS标签(TTL-1);把缓存下的最外层MPLS标签(TTL-1)复制到当前的最外层MPLS标签中，查找转发表出接口，将报文转发给PE2。  
+            4. 报文转发给PE2,PE2将最外层MPLS标签弹出，报文将上送主机收发模块进行处理，PE2将MPLS Echo Reply报文返回给PE1，其中报文目的地址是PE1的MPLS LSR ID。由于返程报文没有绑定SR-MPLS TE Policy，所以沿着IP路径转发。  
+            5. PE1收到回程IP后，生成Tracert检测结果。  
+            
+            如果存在主备Paht，且主备Path下有多条Segment List，Tracert会对所有Segment List进行遍历检测。  
+
+    + TI-LFA FRR  
+        TI-LFA(Topology-Independent Loop-free Alternate)FRR能为Segment Routing隧道提供链路及节点的保护。当某处链路或节点故障时，流量会快速切换到备份路径，继续转发，从而最大程度上避免流量的丢失。  
+
+        SR-MPLS TI-LFA FRR同时适用于SR-MPLS BE和松散形式SR-MPLS TE场景。  
+
+        ***相关概念***  
+
+        |概念|解释|
+        |:--:|:--:|
+        |P空间|以保护链路源端为根节点建立SPF树，所有从根节点不经过保护链路可达的节点集合称为P空间。|
+        |扩展P空间|以保护链路源端的所有邻居为根节点分别建立SPF树，所有从根节点不经过保护链路可达的节点集合称为扩展P空间。P空间或者扩展P空间的节点称为P节点。|
+        |Q空间|以保护链路末端为根节点建立反向SPF树，所有从根节点不经过保护链路可达的节点集合称为Q空间。Q空间的节点称为Q节点。|
+        |PQ节点|PQ节点是指既在(扩展)P空间又在Q空间的节点，PQ节点会作为保护隧道的目的端。|
+        |LFA|LFA(Loop-Free Alternate)算法计算备份链路的基本思路是：以可提供备份链路的邻居为根节点，利用SPF算法计算到达目的节点的最短距离，然后计算出一组开销最小且无环的备份链路。|
+        |RLFA|RLFA(Remote LFA)算法根据保护路径计算PQ节点，并在源节点与PQ节点之间建立隧道形成备份下一跳保户。当保护链路发生故障时，流量自动切换到隧道备份路径，继续转发，从而提高网络可靠性。|
+        |TI-LFA|LFA FRR和Remote LFA对于某些场景中，扩展P空间和Q空间既没有交集，也没有直连的邻居，无法计算出备份路径，不能满足可靠性要求。在这种情况下，实现了TI-LFA。TI-LFA算法根据保护路径计算扩展P空间，Q空间，Post-convergence最短路径树，以及根据不同场景计算Repair List，并从源节点到P节点，再到Q节点建立Segment Routing隧道形成备份下一跳保护。当保护链路发生故障时，流量自动切换到隧道备份路径，继续转发，从而提高网络可靠性。|
+
+        ***产生原因***  
+        传统的LFA技术需要满足至少有一个邻居下一跳到目的节点是无环下一跳。RLFA技术需要满足网络中至少存在一个节点从源节点到该节点，从该节点到目的节点都不经过故障节点。而TI-LFA技术可以用显式路径表达备份路径，对拓扑无约束，提供了更高可靠性的FRR技术。  
+
+        如图所示，现在有数据包需要从DeviceA发往DeviceF。如果扩展P空间与Q空间不相交，则不满足RLFA技术要求，RLFA无法计算出备份路径，也就是Remote LDP LSP。当DeviceB和DeviceE之间发生故障后，DeviceB将数据包转发给DeviceC，但是DeviceC并不是Q节点，无法直接到达目的地址，需要重新计算，由于DeviceC和DeviceD之间开销是100,DeviceC认为到达DeviceF的最优路径是经过DeviceB，因此将数据包重新传回DeviceB，形成环路，转发失败。  
+
+        >DeviceA=1=DeviceB=2=>DeviceC(扩展P空间)
+        >============|<====3=====|
+        >==========cost10=====cost100
+        >============|===========|
+        >DeviceF===DeviceE===DeviceD(Q空间)  
+
+        为了解决上述问题，可以使用TI-LFA。当DeviceB和DeivceE之间发生故障后，DeviceB直接启用TI-LFA FRR备份表项，给数据包增加新的路径信息，即“DeviceC的Node SID， DeviceC和DeviceD之间的Adjacency SID”，保证数据包可以沿着备份路径转发。  
+
+        ***TI-LFA FRR原理***  
+        PE1为源节点，PE3为目的节点，链路中间的数字表示cost值。假设P1节点为故障点。  
+        TI-LFA流量保护分为链路保护和节点保护。  
+
+        1. 链路保护：当需要保护的对象是经过特定链路的流量时，流量保护类型为链路保护。  
+        2. 节点保护：当需要保护的对象是经过特定设备的流量时，流量保护类型为节点保护。节点保护优先级高于链路保护。  
+
+        ***TI-LFA FRR转发流程***  
+        TI-LFA备份路径计算完成之后，如果主路径发生故障，就可以根据备份路径进行转发，避免流量丢失。  
+        
+    + Anycast FRR  
+        ***Anycast SID***  
+        组内所有路由器发布相同的SID，称为Anycast SID。如图，DeviceD和DeviceE都在SR区域出口，通过DeviceD和DeviceE都可以到达非SR区域，因此二者可以互相备份。在这种情况下，可以将DeviceD和DeviceE配置在同一个组里，并且发布相同前缀SID，也即Anycast SID。  
+        Anycast SID的下一跳指向路由器中IGP路径开销最小的设备DeviceD，DeviceD也称为发布Anycast SID的最优节点，其他都是备份节点。当到DeviceD的主下一跳链路或直连邻居节点发生故障，可以通过其他保护路径到达Anycast SID设备，Anycast SID设备可以是与下一跳相同的源，也可以是其他Anycast源。VPN使用SR LSP时，Anycast要配置相同的VPN私网标签。  
+
+        ***Anycast FRR***  
+        Anycast FRR是指多个节点发布相同的前缀SID，形成了FRR。普通的FRR算法，都只能利用SPT树计算节点的备份下一跳，可以支持路由源头单一的场景，对于多个节点发布相同路由的场景无法支持。  
+        多个节点发布相同路由场景下，为了计算前缀SID的备份下一跳，需要将多个路由发布节点变成单个路由发布节点，再进行计算。Anycast FRR方案采用构造一个虚拟节点的方式，将多个相同的路由发布节点转换为单个路由发布节点，然后按TI-LFA算法计算虚拟节点的备份下一跳，Anycast前缀SID从其创建的虚拟节点继承备份下一跳。该方案对备份下一跳计算的算法没有修改，仍然可以保留算法保证的无环特性，算出的备份下一跳和收敛前的周边节点的主下一跳之间不会形成环路。  
+
     + SR-MPLS防微环  
-    + SR-MPLS OAM
+        IGP协议的链路状态数据库是分布式的，这样IGP在无序收敛时可能会产生环路。但这种环路会在转发路径上所有设备都完成收敛之后消失，这种暂态的环路被称为微环路(Micro Loop)。微环可能导致网络丢包，时延抖动和报文乱序等一系列问题，所以必须予以重视。  
+        Segment Routing采用一种对网络影响比较小的方式来消除网络中潜在的环路。它的原理是：如果网络拓扑变化可能引发环路，网络节点通过创建一个无环的Segment List，引导流量转发到目的地址，等待网络节点全部完成收敛以后再回退到正常转发状态，从而能有效地消除网络中的环路。  
+
+        ***SR-MPLS 本地正切防微环***  
+        本地正切防微环指的是紧邻故障节点的节点收敛后引发的环路。如图所示，全网节点都部署TI-LFA，当节点B故障的时候，节点A针对目的地址C的收敛过程如下：  
+
+        1. 节点A感知到故障，进入TI-LFA的快速重路由切换流程，向报文插入Repair List<16056>，将报文转向TI-LFA计算的PQ节点E。因此报文会先转发到下一跳节点D，此时Segment List中的SID为：<16056,103>。  
+        2. 当节点A完成到目的地址C的路由收敛，则直接查找节点C的路由，将报文转发到下一跳节点D，此时不再携带Repair List，而是直接基于Node SID 103进行转发。  
+        3. 如果此时节点D还未完成收敛，当节点A向节点D转发报文时，节点D的转发表中到节点C的路由下一跳还是节点A，这样就在节点A和节点D之间形成了环路。  
+
+        >A(SID 101)===B(SID 102)===C(SID 103)
+        >payload+103+16056(A收敛后，退出TI-LFA后，此SID信息被去掉)|
+        >D(SID 104)===E(SID 105)===F(SID 106)
+
+        通过上述收敛过程的描述可以看出，本地正切环路发生在节点A完成收敛，退出TI-LFA过程，变成正常转发，而网络中其他节点还未完成收敛期间。因此解决这个场景下的环路问题，只需要节点A延时收敛。因为TI-LFA一定是个无环路径，所以只需要维持一段时间按照TI-LFA路径转发，待网络中其他接点完成收敛以后再退出TI-LFA，正常收敛，即可避免正切微环。  
+
+        部署正切防微环后的收敛流程如下：  
+
+        1. 节点A感知到故障，进入TI-LFA流程，报文沿着备份路径转发，下一跳为节点D，并封装Repair List<16056>。  
+        2. 节点A启动一个定时器T1。在T1期间，节点A不响应拓扑变化，转发表不变，报文依旧按照TI-LFA策略转发。网络中其他节点正常收敛。  
+        3. 节点A的定时器T1超时，这时网络中其他节点都已经完成收敛，节点A也正常收敛，退出TI-LFA流程，按照正常收敛后的路径转发报文。  
+
+        通过上述步骤能够有效地避免PLR节点的正切微环问题，但是需要注意，该方案之能解决PLR接点的正切微环问题。这是因为只有在PLR节点才能进入TI-LFA转发流程，才可以通过延时收敛，继续使用TI-LFA路径实现防微环。此外，该方案只限于单点故障，如果是多点故障，TI-LFA备份路径可能也会受影响。  
+        在源节点上配置正切防微环功能，路由延时切换需要满足以下条件：  
+
+        - 本地直连接口故障/BFD down。  
+        - 在延迟期间，网络中没有第二次拓扑变化。  
+        - 路由有备份下一跳。  
+        - 路由主下一跳和故障端口相同。  
+        - 多节点路由延时期间收到路由发布源头变化退出延时。  
+
+        ***SR-MPLS 本地回切防微环***  
+        微环不但可能在路径正切时产生，也可能在故障恢复后路径回切时出现。如图所示：  
+
+        1. 节点A将报文按照路径A->B->C->E->F发送到目的节点F。当B-C之间的链路发生故障之后，A节点会将报文按照重新收敛之后的路径A->B->D->E->F发送到目的节点F。  
+        2. 节点B和节点C之间的链路故障恢复后，假设节点D率先完成收敛。  
+        3. 节点A将报文发给节点B，由于节点B未完成收敛，依然按照故障恢复前路径转发，转发给节点D。  
+        4. 节点D已经完成收敛，所以节点D按照故障恢复后的路径转发到节点B，这样就在节点B和节点D之间形成了环路。  
+        
+        由于回切不会进入TI-LFA转发流程，所以无法像正切一样使用延时收敛的方式解决回切微环问题。  
+        >A===B===C====
+        >====|===|====
+        >====D===E===F
+
+        从上述回切微环产生过程中可以看出，当故障恢复的时候，节点D先于节点B收敛会产生短暂的环路。由于节点D无法预估网络中的链路UP事件，所以也无法预先安装针对链路UP事件计算的无环路径。为了消除回切过程中潜在的环路问题，节点D需要能够收敛到一条无环路径。  
+        如图，节点D感知到B-C的链路UP事件以后，重新收敛到D->B->C->E->F路径。  
+        此外，B-C链路UP事件不会影响到D-B的路径，所以节点D到B的路径一定是一个无环路径。  
+        因此，在构造节点D到节点F的无环路径的时候，无须指定节点D到节点B的路径。同理，节点C到节点F也不会受B-C链路UP事件的影响。节点C到F的路径也一定是无环路径。唯一受影响的是节点B到节点C的路径，所以要计算节点D到节点F的无环路径，只需要指定节点B到节点C的路径，所以要计算节点D到节点F的无环路径，只需要节点B到节点C的路经，所以要计算节点D到节点F的无环路径，只需要指定节点B到节点C的路径即可。根据上述分析，只需要在节点D收敛后的路径中插入一个节点B到节点C的Adjacency SID指示报文从节点B转发到节点C，就可以保证节点D到节点F的路径无环。  
+        部署回切防微环后的收敛流程如下：  
+
+        1. 节点B和节点C的链路故障后恢复，节点D率先完成收敛。  
+        2. 节点D启动定时器T1，在T1超时前，节点D针对访问节点F的报文计算的防微环Segment List为<16023>。  
+        3. 节点A将报文转发给节点B，由于节点B未完成收敛，依然按照故障恢复前路径转发，转发给节点D。  
+        4. 节点D在报文中插入防微环Segment List<16023>，并转发到节点B。  
+        5. 节点B根据Adjacency SID 16023指令执行转发动作，沿着Adjacency SID 16023指定的出接口转发到节点C，并将外层标签16023去除。  
+        6. 节点C根据Node SID 106按最短路径转发到目的地址F。  
+
+        从以上过程可以看出，由于节点D转发报文的时候插入了防微环Segment List<16023>，所以消除了网络中潜在的环路。  
+        当节点D的定时器T1超时后，网络中的其他节点也都已经完成收敛，头节点A重新按照收敛后的正常路径A->B->C->E->F转发报文。  
+
+        ***SR-MPLS远端正切防微环***  
+        前面介绍了本地正切防微环，实际上正切时不仅会导致本地微环，也可能引起远端节点之间形成环路，即沿着报文转发路径，如果离故障点更近的节点先于离故障点远的节点收敛，就可能会导致环路。下图，描述远端正切微环产生过程：  
+
+        1. 节点C和节点E之间的链路故障，假设节点G率先完成收敛，节点B未完成收敛。  
+        2. 节点A和节点B沿着故障前路径将报文转发到节点G。  
+        3. 由于节点G已经完成收敛，根据路由下一跳转发到节点B。这样报文就在节点B和节点G之间形成了环路。  
+
+        >A===B===G===C====  
+        >====|=======|(断点)
+        >====D=======E===F
+
+        由于计算量的关系，通常网络节点只能针对本地直连的链路或节点故障预先计算无环路径，而无法针对网络中任何其他潜在的故障预先计算无环路径。因此要解决此场景的微环问题，只能在节点G收敛以后安装一条无环路径。  
+
+        上面已经提到，链路Down触发的拓扑变化只会影响收敛前经过该链路的转发路径，如果收敛前某节点到目的节点的路径不经过故障链路，那该路径一定不会受该链路故障事件的影响。从图中拓扑可以看出，节点G到D的路径不会受到C-E的链路故障的影响，所以节点G到F的无环路径不需要指定节点G到D的路径不会受C-E的链路故障的影响，所以节点G到F的无环路径不需要指定节点G到节点D这段路径。同样，节点E到节点F也不会受C-E的链路故障的影响，所以也无须指定节点E到F的路径。同样，节点E到节点F也不会受C->E的链路故障的影响，所以也无须指定节点E到F的路径。这样一来，只有节点D到节点E的路径受C-E的链路故障的影响，所以无环路径只需要指定节点D到节点E的Adjacency SID 16045即可。
+        使能远端正切防微环后的收敛流程如下：  
+
+        1. 节点C和节点E之间的链路故障，假设节点G率先完成收敛。  
+        2. 节点G启动定时器T1，在T1超时前，节点G针对访问节点F的报文计算的防微环Segment List为<16045>。  
+        3. 节点A将报文转发给节点B，由于节点B未完成收敛，依然按照故障发生之前的路径将报文转发给节点G。  
+        4. 节点G在报文中插入防微环Segment List<16045>，并转发到节点B。  
+        5. 节点B根据Adjacency SID 16045的指令执行转发动作，将报文转发给节点D。  
+        6. 节点D根据Adjacency SID 16045的指令执行转发动作，沿着Adjacency SID 16045指定的出接口转发到节点E，并将外层标签16045去除。  
+        7. 节点E根据Node SID 106将报文按最短路径转发到目的地址F。  
+
+        从以上过程可以看出，由于节点G转发报文的时候插入了防微环Segment List<16045>，所以消除了网络中潜在的环路。  
+        当节点G的定时器T1超时后，网络中的其他节点也都已经完成了收敛，头节点A按照正常收敛后的路径A->B->D->E->F转发报文。  
+
+        ***SR-MPLS远端回切防微环***  
+        其过程如下：  
+
+        1. 节点C和节点E之间的链路故障恢复，假设节点B率先完成收敛，节点G未完成收敛。  
+        2. 节点B将报文转发给节点G。  
+        3. 但是节点G未完成收敛，仍旧按照故障恢复前路径将报文转发给节点B。这样报文在节点B和节点G之间形成了环路。  
+
+        解决思路就是在节点B启动定时器T1，在T1超时前，节点B针对访问节点F的报文，增加节点G和节点C之间的Adjacency SID，确保报文转发到节点C。这样节点C就可以根据Node SID 106按最短路径转发到目的地址F。  
+
+    + SR-MPLS OAM  
+        SR-MPLS OAM
     + MPLS in UDP
     + SR-MPLS TTL  
 
