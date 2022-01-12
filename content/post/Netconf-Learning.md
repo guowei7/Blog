@@ -8,7 +8,7 @@ DisableComments: false
 ---
 主要记录网络配置命令学习的心得
 <!--more-->
-### 常用的网络配置命令  
+### 常用的网络配置命令
 
 1. 进入网络配置命令行  
     * 从host主机进入  
@@ -306,13 +306,21 @@ DisableComments: false
     
 ### 仪表常用配置
 
-1. 连接仪表后，配置需要打流的端口port。  
-2. 添加devices。  
-    + 配置对应的source ip和gateway。
-    + ARP/ND->start ARP/ND学习ARP。
-3. 添加三层流。  
-    + Add Bound Stream Block。
-    + port选择，源端口->目的端口。
-    + apply后，start ARP/ND进行学习arp。
-4. 可以利用capture来进行抓报。  
++ 配置普通的三层流  
+    1. 连接仪表后，配置需要打流的端口port。  
+    2. 添加devices。  
+        * 配置对应的source ip和gateway。
+        * ARP/ND->start ARP/ND学习ARP。
+    3. 添加三层流。  
+        * Add Bound Stream Block。
+        * port选择，源端口->目的端口。
+        * apply后，start ARP/ND进行学习arp。
+    4. 可以利用capture来进行抓报。  
+
++ 模拟isis的连接，并发送路由  
+    1. Devices->Add Multiple Device。  
+    2. 选择对应Port、勾选ISIS和Generate Routes、Encapsulation配置默认、Devices中IPv4配置到连接的设备接口在同一个网段、配置ISIS、finish。  
+    3. 2配置完成后会弹出“IS-IS LSP Generator”配置界面。Create Level2 LSPs、选择Port下对应的设备、Topology Type选择None、配置模拟的route前缀、Internal Routes条目选择0、External Routes模拟对应的条目。  
+    4. Start Devices启动设备。  
+
 
