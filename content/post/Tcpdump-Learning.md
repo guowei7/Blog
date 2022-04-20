@@ -3,10 +3,10 @@ title: "Tcpdump Learning"
 date: 2021-07-23T15:57:09+08:00
 Description: "记录常用的tcpdump命令"
 Tags: [
-    "tcpdump"
+    "shell"
     ]
 Categories: [
-    "计算机网络"
+    "Linux"
     ]
 DisableComments: false
 ---
