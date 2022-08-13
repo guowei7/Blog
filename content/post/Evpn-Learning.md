@@ -38,7 +38,7 @@ DisableComments: false
     + 避免全连接造成网络资源的消耗：EVPN支持在公网上部署路由反射器，避免在公网上部署PE设备间的全连接，减少逻辑连接的数量；  
     + 减少ARP广播流量造成网络资源的消耗：PE设备通过本地缓存的MAC地址信息，可以对本地连接的站点发来的ARP请求进行响应，防止ARP请求的大范围广播。  
 
-#### EVPN原理描述  
+#### EVPN原理描述
 
 * EVPN的典型组网  
 
@@ -144,7 +144,7 @@ DisableComments: false
     在CE双归PE的组网中，两个PE间发送多播报文时，根据水平分割原理，多播报文还会封装上EVPN ESI Label，防止传输多播报文过程中出现环路。如下图所示，CE1双归接入PE1和PE2。当PE1收到CE1发送来的多播报文时，封装ESI之后再发送给PE2；当PE2收到该多播报文后，发现携带的ESI与本地ESI相同，PE2丢弃该报文，从而避免环路。  
     ![ESI防止环路](../../images/EVPN-Learning/ESI防止环路.png)  
 
-#### EVPN-MPLS   
+#### EVPN-MPLS
 
 1. EVPN多归技术  
 
@@ -176,22 +176,22 @@ DisableComments: false
 2. EVPN Seamless MPLS的基本原理  
 3. EVPN的服务模式  
 
-#### EVPN-VXLAN  
+#### EVPN-VXLAN
 
 * EVPN-VXLAN基本原理  
 
-#### EVPN-VPWS  
+#### EVPN-VPWS
 
 * EVPN-VPWS基本原理  
 
-#### PBB-EVPN  
+#### PBB-EVPN
 
 * PBB-EVPN基本原理  
 * 部署H-VPLS网络迁移到PBB-EVPN网络  
 
-#### EVPN E-Tree  
+#### EVPN E-Tree
 
-#### EVPN MAC迁移抑制  
+#### EVPN MAC迁移抑制
 在EVPN ELAN网络中，可能由于部署原因导致两个PE设备之间可以同时通过网络侧和接入侧链路互连。这样该组网中会出现BUM流量环路，并发生MAC路由震荡现象，从而影响设备正常使用。系统中的EVPN MAC迁移抑制功能可以解决这个问题。  
 ![EVPN的BUM流量环路示意图.png](../../images/EVPN-Learning/EVPN的BUM流量环路示意图.png)  
 如上图所示，PE1和PE2之间部署EVPN协议。CE1和CE2可以采用VLAN、QinQ、PW或静态VXLAN几种方式中的一种来接入PE1和PE2。PE1和PE2可以同时通过网络侧和接入侧链路互连，这样将产生BUM流量环路：  
