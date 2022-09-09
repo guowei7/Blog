@@ -7,7 +7,8 @@ Categories: ["Entertainment"]
 DisableComments: false
 ---
 
-<!--记录三阶魔方复原方法-->
+记录三阶魔方复原方法
+<!--more-->
 ### CFOP  
 #### 介绍CFOP
 三阶魔方公式字母介绍:  
