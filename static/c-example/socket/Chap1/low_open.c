@@ -6,7 +6,7 @@ low_open.c,wguo 2021/08/01
 #include <fcntl.h>
 #include <unistd.h>
 
-void error_handler(char *message)
+void error_handler(char *message);
 
 int main(void)
 {
@@ -20,7 +20,7 @@ int main(void)
 
 	if(write(fd,buf,sizeof(buf)) == -1)
 		error_handler("write() error");
-	close(fd)
+	close(fd);
 	return 0;
 }
 

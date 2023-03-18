@@ -8,7 +8,7 @@ low_read.c,wguo 2021/08/01
 
 #define BUF_SIZE 100
 
-void error_handler(char *message)
+void error_handler(char *message);
 
 int main(void)
 {
