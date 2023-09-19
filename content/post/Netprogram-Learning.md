@@ -676,9 +676,9 @@ TCP是Transmission Control Protocol(传输控制协议)的简写，意为“对�
 
         TCP在实际通信过程中也会经过3次对话过程，因此，该过程又称Three-way handshaking(三次握手)。  
 
-        >主机A=================主机B  
+        >主机A===============主机B  
         >|----seq:1000;ack----->|  
-        >|<--seq:2000;ack:1001--|
+        >|<--seq:2000;ack:1001--|  
         >|--seq:1001;ack2001--->|  
         
         套接字是以全双工(Full-duplex)方式工作的。也就是说，它可以双向传递数据。因此，收发数据前需要做一些准备。首先，请求连接的主机A向主机B传递如下信息:  
@@ -710,11 +710,11 @@ TCP是Transmission Control Protocol(传输控制协议)的简写，意为“对�
     + TCP的内部工作原理2:与对方主机的数据交换  
         通过第一步三次握手过程完成了数据交换准备，下面就正式开始收发数据，其默认方式如下:  
 
-        >主机A==============主机B
-        >|==seq:1200,100bytes=>|
-        >|<======ack:1301======|
-        >|==seq:1301,100bytes=>|
-        >|<======ack:1401======|
+        >主机A==============主机B  
+        >|==seq:1200,100bytes=>|  
+        >|<======ack:1301======|  
+        >|==seq:1301,100bytes=>|  
+        >|<======ack:1401======|  
         
         主机A分两次(分2个数据包)向主机B传递200字节的过程。首先主机A通过1个数据包发送100个字节的数据，数据包的seq为1200。主机B为了确认这一点，向主机A发送ACk1301消息。  
         此时的ACK号为1301而非1201，原因在于ACK号的增加为传输的字节数。假设每次ACK号不加传输的字节数，这样虽然可以确认数据包的传输，但无法明确100字节全都正确传递还是丢失了一部分，比如只传递了80个字节。因此按如下公式传递ACK消息：
@@ -723,13 +723,13 @@ TCP是Transmission Control Protocol(传输控制协议)的简写，意为“对�
 
         与三次握手协议相同，最后加1是为了告知对方下次要传递的SEQ号。下面分析传输过程中数据包消失的情况:  
 
-        >主机A===================主机B
-        >|====seq:1200,100bytes====>|
-        >|<=========ack:1301========|
-        >|====seq:1301,100bytes====>|
-        >|=====fail,timeout=========|
-        >|====seq:1301,100bytes====>|
-        >|<=========ack:1402========|
+        >主机A===================主机B  
+        >|====seq:1200,100bytes====>|  
+        >|<=========ack:1301========|  
+        >|====seq:1301,100bytes====>|  
+        >|=====fail,timeout=========|  
+        >|====seq:1301,100bytes====>|  
+        >|<=========ack:1402========|  
 
         如上主机A通过seq1301数据包向主机B传递100字节数据。但中间发生了错误，主机B未收到。经过一段时间后，主机A仍未收到对于SEQ1301的ACK确认，因此试着重传该数据包。为了完成数据重传，TCP套接字启动计时器等待ACK应答。若相应计时器发生超时则重传。  
         
@@ -743,11 +743,11 @@ TCP是Transmission Control Protocol(传输控制协议)的简写，意为“对�
         
         先由套接字A向套接字B传递断开连接的消息，套接字B发出确认收到的消息，然后向套接字A传递可以断开连接的消息，套接字A同样发出确认消息，如图:  
 
-        >主机A=======================主机B
-        >|=====fin seq:5000,ack:-======>|
-        >|<====ack seq:7500,ack:5001====|
-        >|<====fin seq:7501,ack:5001====|
-        >|=====ack seq:5001,ack:7502===>|
+        >主机A=======================主机B  
+        >|=====fin seq:5000,ack:-======>|  
+        >|<====ack seq:7500,ack:5001====|  
+        >|<====fin seq:7501,ack:5001====|  
+        >|=====ack seq:5001,ack:7502===>|  
         
         数据包内的FIN表示断开连接。也就是说，双方各发送1次FIN消息后断开连接。此过程经历4各阶段，因此又称为四次握手。  
 
@@ -817,20 +817,214 @@ TCP是Transmission Control Protocol(传输控制协议)的简写，意为“对�
 
         bound_host2.c程序3次调用sendto函数以传输数据，bound_host1.c则调用3次recvfrom函数以接收数据。recvfrom函数调用间隔为5秒，因此，调用recvfrom函数前已调用了3次sendto函数。也就是说，此时数据已经传输到bound_host1.c。如果是TCP程序，这时只需调用1次输入函数即可读入数据。UDP则不同，在这种情况下也需要调用3次recvfrom函数。  
 
-        UDP套接字传输的数据包又称数据报，实际上数据报也属于数据包的一种。只是与TCP包不同，其本身可以成为1个完整数据。这与
+        UDP套接字传输的数据包又称数据报，实际上数据报也属于数据包的一种。只是与TCP包不同，其本身可以成为1个完整数据。这与UDP的数据传输特性有关，UDP中存在数据边界，1个数据包即可成为一个完整数据，因此称为数据报。  
+
     + 已连接(connected)UDP套接字与未连接(unconnected)UDP套接字接口  
+        TCP套接字中需注册传输数据的目标IP和端口号，而UDP中则无需注册。因此，通过sendto函数传输数据的过程大致可分为以下3个阶段。  
+            1. 向UDP套接字注册目标IP和端口号。  
+            2. 传输数据。  
+            3. 删除UDP套接字中注册的目标地址信息。  
+        每次调用sendto函数时重复上述过程。每次都变更目标地址，因此可以重复利用同一UDP套接字向不同目标传输数据。这种未注册目标地址信息的套接字称为未连接套接字，反之，注册了目标地址的套接字称为连接connected套接字。显然，UDP套接字默认属于未连接套接字。但UDP套接字在下述情况下显得太不合理:  
+
+        >ip为211.210.147.82的主机82号端口共准备了3个数据，调用3次sendto函数进行传输  
+        
+        此时需要重复3次上述三阶段。因此，要与同一主机进行长时间通信时，将UDP套接字变成已连接套接字会提高效率。上述三个阶段中，第一个和第三个阶段占整个通信过程近1/3的时间，缩短这部分时间将大大提高整理性能。   
+
     + 创建已连接UDP套接字  
+        创建已连接UDP套接字的过程格外简单，只需针对UDP套接字调用connect函数。  
+
+        ``` C
+        sock = socket(PF_INET, SOCK_DGRAM, 0);
+        memset(&adr, 0, sizeof(adr));
+        adr.sin_family = AF_INET;
+        adr.sin_addr.s_addr = ...
+        adr.sin_port = ...
+        connect(sock, (struct sockaddr *)&adr, sizeof(adr));
+        ```
+        上述代码看似与TCP套接字创建过程一致，但socket函数的第二个参数分明是SOCK_DGRAM。也就是说，创建的的确是UDP套接字。当然，针对UDP套接字调用connect函数并不意味着要与对方UDP套接字连接，这只是向UDP套接字注册目标IP和端口信息。  
+        
 ### 7. 优雅的断开套接字连接
 1. 基于TCP的半关闭  
+    TCP中的断开连接过程比建立连接过程更重要，因为连接过程中一般不会出现大的变数，但断开过程有可能发生预想不到的情况，因此应准确掌控。只有掌握了下面要讲解的半关闭(Half-close)，才能明确断开过程。  
+    + 单方面断开连接带来的问题  
+        Linux的close函数和Windows的closesocket函数意味着完全断开连接。完全断开不仅指无法传输数据，而且也不能接收数据。因此，在某些情况下，通信一方调用close或closesocket函数断开连接就显得不太优雅。  
+        为了解决这类问题，“只关闭一部分数据交换中使用的流”(Half-close)的方法应运而生。断开一部分连接是指，可以传输数据但无法接收，或可以接收数据但无法传输。顾名思义就是只关闭流的一半。   
+
+    + 套接字和流(Stream)  
+        两台主机通过套接字建立连接后进入可交换数据的状态，又称"流形成的状态"。也就是把建立套接字后可交换数据的状态看作一种流。  
+        此处的流可以比作水流。水朝着一个方向流动，同样，在套接字的流中，数据也只能向一个方向移动。因此，为了进行双向通信，需要如下两个流:  
+
+        >-------read() <====I/O流1==== write()  
+        >HostA---------------------------------HostB  
+        >-------write() ====I/O流2====> read()  
+
+        一旦两台主机间建立了套接字连接，每个主机就会拥有单独的输入流和输出流。当然，其中一个主机的输入流与另一个主机的输出流相连，而输出流则与另一主机的输入流相连。另外，"优雅地断开连接方式"指断开其中1个流，而非同时断开两个流。Linux的close和Windows的closesocket函数将同时断开这两个流。  
+
+    + 针对优雅断开的shutdown函数  
+        接下来介绍用于半关闭的函数。下面这个shutdown函数就用来关闭其中1个流。  
+
+        ``` C
+        #include <sys/socket.h>
+
+        //sock：需要断开的套接字文件描述符
+        //howto：传递断开方式信息
+        //成功时返回0，失败时返回-1
+        int shutdown(int sock, int howto);
+        ```
+
+        调用上述函数时，第二个参数决定断开连接的方式，其可能值如下:  
+
+        - SHUT_RD:断开输入流  
+        - SHUT_WR:断开输出流  
+        - SHUT_RDWR:同时断开I/O流  
+        
+        若向shutdown的第二个参数传递SHUT_RD，则断开输入流，套接字无法接收数据。即使输入缓冲收到数据也会抹去，而且无法调用输入相关函数。如果向shutdown函数的第二个参数传递SHUT_WR，则中断输出流，也就无法传输数据。但如果输出缓冲还留有未传输的数据，则将传递至目标主机。最后，若传入SHUT_RDWR，则同时中断I/O流。这相当于2次调用shutdown，其中一次以SHUT_RD为参数，另一次以SHUT_WR为参数。  
+
+    + 为何需要半关闭  
+
+    + 基于半关闭的文件传输程序  
+        首先介绍服务器端  
+        [file_server.c](../../c-example/socket/Chap7/file_server.c)  
+        服务端程序  
+        [file_client.c](../../c-example/socket/Chap7/file_client.c)  
+
 ### 8. 域名及网络地址
 1. 域名系统  
+    + 什么是域名  
+    + DNS服务器  
+
 2. IP地址和域名之间的转换  
+    本节介绍通过程序向DNS服务器发出解析请求的方式。  
+    + 利用域名获取IP地址  
+        ``` c
+        #include <netdb.h>
+
+        struct hostent *gethostbyname(const char *hostname);
+        /* 成功时返回hostent结构体地址，失败时返回NULL指针 */
+
+        struct hostent
+        {
+            char *h_name;       //official name \0结尾
+            char **h_aliases;   //alias list 字符串数组，最后一个为NULL
+            int h_addrtype;     //host address type
+            int h_length;       //address length
+            char **h_addr_list; //address list ip地址数组，最后一个为NULL
+        }
+        ```
+
+        [gethostbyname.c](../../c-example/socket/Chap8/gethostbyname.c)  
+
+    + 利用IP获取域名地址  
+        ``` c
+        #include <netdb.h>
+
+        struct hostent *gethostbyaddr(const char *addr, socklen_t len, int family);
+        ```
+
+        [gethostbyaddr.c](../../c-example/socket/Chap8/gethostbyaddr.c)  
+
 ### 9. 套接字的多种可选项
 1. 套接字可选项和I/O缓冲大小  
+    + 套接字多种可选项  
+    
+        |协议层|选项名|读取|设置|
+        |:-:|:-:|:-:|:-:|
+        |SOL_SOCKET|SO_SNDBUF|O|O|
+        |--|SO_RCVBUF|O|O|
+        |--|SO_REUSEADDR|O|O|
+        |--|SO_KEEPALIVE|O|O|
+        |--|SO_BROADCAST|O|O|
+        |--|SO_DONTROUTE|O|O|
+        |--|SO_OOBINLINE|O|O|
+        |--|SO_ERROR|O|X|
+        |--|SO_TYPE|O|X|
+        |IPPROTO_IP|IP_TOS|O|O|
+        |--|IP_TTL|O|O|
+        |--|IP_MULTICAST_TTL|O|O|
+        |--|IP_MULTICAST_LOOP|O|O|
+        |--|IP_MULTICAST_IF|O|O|
+        |IPPROTO_TCP|TCP_KEEPALIVE|O|O|
+        |--|TCP_NODELAY|O|O|
+        |--|TCP_MAXSEG|O|O|
+
+        IPPROTO_IP层可选项是IP协议相关事项，IPPROTO_TCP层可选项是TCP协议相关的事项，SOL_SOCKET层套接字相关的通用可选项。  
+
+    + getsockopt&setsockopt  
+
+        ``` c
+        #include <sys/socket.h>
+
+        int getsockopt(int sock, int level, int optname, void *optval, socklen_t *optlen);
+        /* 成功时返回0,失败时返回-1 */
+
+        int setsockopt(int sock, int level, int optname, void *optval, socklen_t optlen);
+        ```
+
+        [sock_type.c](../../c-example/socket/Chap8/sock_type.c)  
+
+    + SO_SNDBUF&SO_RCVBUF  
+        SO_RCVBUF是输入缓冲大小相关可选项，SO_SNDBUF是输出缓冲大小相关可选项。  
+
+        [get_buf.c](../../c-example/socket/Chap8/get_buf.c)  
+        [set_buf.c](../../c-example/socket/Chap8/set_buf.c)  
+
 2. SO_REUSEADDR  
+    + 发生地址分配错误(Binding Error)  
+
+        [reuseadr_eserver.c](../../c-example/socket/Chap8/reuseadr_eserver.c)  
+
+        服务端控制台输入CTRL+C关闭服务器后，服务器端重新运行时将产生问题。用同一端口号重新运行服务器端，将输出"bind() error"，并且无法再次运行
+
+    + Time-wait状态  
+        假设主机A和主机B建立连接后，当主机A在发送ACK响应主机B的FIN后立刻消除套接字。然而这条ACK消息再传递途中丢失，未能传给主机B。这时主机B会认为之前自己发送的FIN消息未能抵达主机A，继而试图重传。但此时主机A已是完全终止状态，主机B永远无法收到主机A最后传来的ACK消息。而如果，主机A的套接字处在Time-wait状态，则会向主机B重传最后的ACK消息，主机B也可以正常终止。因此，先传输FIN消息的主机应经过Time-wait过程。  
+
+    + 地址再分配  
+        如果主机B重传FIN后，主机A收到FIN报文后会重启Time-wait的定时器，这样在网络状态不理想时，Time-wait状态将持续。  
+        解决方案就是在套接字的可选项中更改SO_REUSEADDR的状态。时当调整该参数，可将Time-wait状态下的套接字端口重新分配给新的套接字。SO_REUSEADDR的默认值为0,因此需要改成1。  
+
 3. TCP_NODELAAY  
+    + Nagle算法  
+        只有收到前一数据的ACK消息时，Nagle算法才发送下一数据  
+
+    + 禁用Nagle算法  
+        设置TCP_NODELAY为1  
+
 ### 10. 多进程服务器端
 1. 进程概念及应用  
+    + 两种类型的服务器端  
+        * 第一个连接请求的受理时间为0秒，第50个连接请求的受理时间为50秒，第100个连接请求的受理时间为100秒!但只要受理，服务只需1秒钟。  
+        * 所有连接请求的受理时间不超过1秒，但平均服务时间为2-3秒。  
+        
+    + 并发服务器端的实现方法  
+        即使有可能延长服务时间，也有必要改进服务器端，使其同时向所有发起请求的客户端提供服务，以提高平均满意度。而且，网络程序中数据通信时间比CPU运算时间占比更大，因此，向多个客户端提供服务是一种有效利用CPU的方式。下面是具有代表性的并发服务器端实现模型和方法：  
+        * 多进程服务器:通过创建多个进程提供服务。  
+        * 多路复用服务器：通过捆绑并统一管理I/O对象提供服务。  
+        * 多线程服务器：通过生成与客户端等量的线程提供服务。  
+
+    + 理解进程  
+        进程:占用内存空间的正在运行的程序  
+        从操作系统的角度看，进程是程序流的基本单位，若创建多个进程，则操作系统将同时运行。有时一个程序运行过程中也会产生多个进程。接下来要创建的多进程服务器就是其中的代表。编写服务器端前，先了解一下通过程序创建进程的方法。  
+
+    + 进程ID  
+        所有进程都会从操作系统分配到ID。此ID称为"进程ID"，其值为大于2的整数。1要分配给操作系统启动后的首个进程，因此用户进程无法得到ID值1。  
+
+    + 通过调用fork函数创建进程  
+        创建进程的方法很多，此处只介绍用于创建多进程服务器端的fork函数。  
+
+        ``` C
+        #include <unistd.h>
+
+        pid_t fork(void);
+        /* 成功时返回进程ID，失败时返回-1 */
+        ```
+
+        fork函数将创建调用的进程副本。也就是说，并非根据完全不同的程序创建进程，而是复制正在运行的，调用fork函数的进程。另外，两个进程都将执行fork函数调用后的语句。但因为通过同一个进程、复制相同的内存空间，之后的程序流要根据fork函数的返回值加以区分。即利用fork函数的如下特点区分程序执行流程。  
+
+        * 父进程:fork函数返回子进程ID。  
+        * 子进程:fork函数返回0  
+        
+        [fork.c](../../c-example/Chap10/fork.c)  
+        
 2. 进程和僵尸进程  
 3. 信号处理  
 4. 基于多任务的并发服务器  
